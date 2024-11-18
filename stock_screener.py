@@ -33,36 +33,38 @@ def fetch_and_analyze_data(ticker):
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
 
-        # Ensure data is available
-        if data.empty:
-            return {"Ticker": ticker, "Error": "No historical data available"}
+        # Check if sufficient data is available
+        if data.empty or len(data) < 20:
+            return {"Ticker": ticker, "Error": "Insufficient data for calculations"}
 
         # Calculate Indicators
-        data["RSI"] = calculate_rsi(data)  # RSI
-        data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()  # Upper Bollinger Band
-        data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()  # Lower Bollinger Band
+        data["RSI"] = calculate_rsi(data)
+        data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
+        data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
 
-        # Fallback: Ensure Bollinger Bands and RSI are calculated
-        if data["RSI"].isnull().all():
-            avg_rsi = None
-        else:
-            avg_rsi = data["RSI"].iloc[-1]  # Latest RSI value
-
-        if data["Lower_BB"].isnull().all() or data["Upper_BB"].isnull().all():
-            return {"Ticker": ticker, "Error": "Insufficient data for Bollinger Bands"}
+        # Ensure Bollinger Bands and RSI have values
+        if data["Lower_BB"].isnull().any() or data["RSI"].isnull().any():
+            return {"Ticker": ticker, "Error": "Indicators could not be calculated"}
 
         # Timeframe-Specific Calculations
         def levels_for_timeframe(data, period):
             data_period = data[-period:]  # Last `period` rows
             if data_period.empty:
-                return None, None, None, None  # Fallback for insufficient data
+                return None, None, None, None
 
             avg_rsi = data_period["RSI"].mean()
 
             # Use Bollinger Bands for levels
-            buy = data_period["Lower_BB"].mean() if avg_rsi is None or avg_rsi < 30 else None
-            exit = data_period["Upper_BB"].mean() if avg_rsi is None or avg_rsi > 70 else None
-            stop_loss = buy * 0.97 if buy else None  # 3% below buy price
+            buy = data_period["Lower_BB"].mean()
+            exit = data_period["Upper_BB"].mean()
+            stop_loss = buy * 0.97 if buy else None
+
+            # Adjust levels based on RSI thresholds
+            if avg_rsi is not None:
+                if avg_rsi >= 30:  # RSI indicates no buy
+                    buy = None
+                if avg_rsi <= 70:  # RSI indicates no exit
+                    exit = None
 
             return buy, exit, stop_loss, avg_rsi
 
@@ -71,24 +73,24 @@ def fetch_and_analyze_data(ticker):
         weekly_buy, weekly_exit, weekly_stop_loss, weekly_rsi = levels_for_timeframe(data, 5)
         monthly_buy, monthly_exit, monthly_stop_loss, monthly_rsi = levels_for_timeframe(data, 20)
 
-        # Return results as a dictionary
+        # Return results
         return {
             "Ticker": ticker,
             "Daily Buy Price": round(daily_buy, 2) if daily_buy else "N/A",
             "Daily Exit Price": round(daily_exit, 2) if daily_exit else "N/A",
             "Daily Stop Loss": round(daily_stop_loss, 2) if daily_stop_loss else "N/A",
-            "Daily RSI": round(daily_rsi, 2) if isinstance(daily_rsi, (int, float)) else "N/A",
+            "Daily RSI": round(daily_rsi, 2) if daily_rsi else "N/A",
             "Weekly Buy Price": round(weekly_buy, 2) if weekly_buy else "N/A",
             "Weekly Exit Price": round(weekly_exit, 2) if weekly_exit else "N/A",
             "Weekly Stop Loss": round(weekly_stop_loss, 2) if weekly_stop_loss else "N/A",
-            "Weekly RSI": round(weekly_rsi, 2) if isinstance(weekly_rsi, (int, float)) else "N/A",
+            "Weekly RSI": round(weekly_rsi, 2) if weekly_rsi else "N/A",
             "Monthly Buy Price": round(monthly_buy, 2) if monthly_buy else "N/A",
             "Monthly Exit Price": round(monthly_exit, 2) if monthly_exit else "N/A",
             "Monthly Stop Loss": round(monthly_stop_loss, 2) if monthly_stop_loss else "N/A",
-            "Monthly RSI": round(monthly_rsi, 2) if isinstance(monthly_rsi, (int, float)) else "N/A",
+            "Monthly RSI": round(monthly_rsi, 2) if monthly_rsi else "N/A",
         }
     except Exception as e:
-        # Return the error for debugging
+        # Handle and log errors
         return {"Ticker": ticker, "Error": str(e)}
 
 # Fetch and Analyze Data for All Tickers
@@ -114,10 +116,9 @@ for result in results:
         continue
 
     ticker = result["Ticker"]
-    st.write(f"RSI Chart for {ticker}")
     data = yf.Ticker(ticker.strip()).history(period="6mo")
     data["RSI"] = calculate_rsi(data)
-    
+
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(data.index, data["RSI"], label="RSI", color="blue")
     ax.axhline(30, color="green", linestyle="--", label="Oversold (30)")
