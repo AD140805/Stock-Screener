@@ -33,9 +33,12 @@ def fetch_and_analyze_data(ticker):
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
 
-        # Check if sufficient data is available
+        # Check if data is available
         if data.empty or len(data) < 20:
             return {"Ticker": ticker, "Error": "Insufficient data for calculations"}
+
+        # Fill missing values in Close prices
+        data['Close'] = data['Close'].fillna(method='ffill').fillna(method='bfill')
 
         # Calculate Indicators
         data["RSI"] = calculate_rsi(data)
@@ -43,7 +46,7 @@ def fetch_and_analyze_data(ticker):
         data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
 
         # Ensure Bollinger Bands and RSI have values
-        if data["Lower_BB"].isnull().any() or data["RSI"].isnull().any():
+        if data["Lower_BB"].isnull().all() or data["RSI"].isnull().all():
             return {"Ticker": ticker, "Error": "Indicators could not be calculated"}
 
         # Timeframe-Specific Calculations
