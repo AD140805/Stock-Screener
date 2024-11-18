@@ -39,16 +39,17 @@ def fetch_and_analyze_data(ticker):
 
         # Calculate Indicators
         data["RSI"] = calculate_rsi(data)  # RSI
-        data["50_MA"] = data["Close"].rolling(window=50).mean()  # 50-day Moving Average
-        data["200_MA"] = data["Close"].rolling(window=200).mean()  # 200-day Moving Average
         data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()  # Upper Bollinger Band
         data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()  # Lower Bollinger Band
 
-        # Handle cases where RSI cannot be calculated
+        # Fallback: Ensure Bollinger Bands and RSI are calculated
         if data["RSI"].isnull().all():
             avg_rsi = None
         else:
             avg_rsi = data["RSI"].iloc[-1]  # Latest RSI value
+
+        if data["Lower_BB"].isnull().all() or data["Upper_BB"].isnull().all():
+            return {"Ticker": ticker, "Error": "Insufficient data for Bollinger Bands"}
 
         # Timeframe-Specific Calculations
         def levels_for_timeframe(data, period):
@@ -59,8 +60,8 @@ def fetch_and_analyze_data(ticker):
             avg_rsi = data_period["RSI"].mean()
 
             # Use Bollinger Bands for levels
-            buy = data_period["Lower_BB"].mean() if avg_rsi < 30 else None
-            exit = data_period["Upper_BB"].mean() if avg_rsi > 70 else None
+            buy = data_period["Lower_BB"].mean() if avg_rsi is None or avg_rsi < 30 else None
+            exit = data_period["Upper_BB"].mean() if avg_rsi is None or avg_rsi > 70 else None
             stop_loss = buy * 0.97 if buy else None  # 3% below buy price
 
             return buy, exit, stop_loss, avg_rsi
