@@ -46,6 +46,10 @@ def fetch_and_analyze_data(ticker):
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
         
+        # Handle insufficient data
+        if len(data) < 20:
+            return {"Ticker": ticker, "Error": "Insufficient data for analysis"}
+
         # Calculate Indicators
         data["RSI"] = calculate_rsi(data)
         data["ATR"] = calculate_atr(data)
@@ -54,6 +58,10 @@ def fetch_and_analyze_data(ticker):
         # Timeframe Levels
         def levels_for_timeframe(data, period):
             data_period = data[-period:]
+
+            # Validate data availability
+            if len(data_period) < period:
+                return None, None, None
 
             # Determine Buy Price
             lower_bb = data_period["Lower_BB"].iloc[-1]
@@ -74,17 +82,21 @@ def fetch_and_analyze_data(ticker):
         weekly_buy, weekly_exit, weekly_stop_loss = levels_for_timeframe(data, 5)
         monthly_buy, monthly_exit, monthly_stop_loss = levels_for_timeframe(data, 20)
 
+        # Handle cases where levels are None
+        def safe_round(value):
+            return round(value, 2) if value is not None else "N/A"
+
         return {
             "Ticker": ticker,
-            "Daily Buy": round(daily_buy, 2) if daily_buy else "N/A",
-            "Daily Exit": round(daily_exit, 2) if daily_exit else "N/A",
-            "Daily Stop Loss": round(daily_stop_loss, 2) if daily_stop_loss else "N/A",
-            "Weekly Buy": round(weekly_buy, 2) if weekly_buy else "N/A",
-            "Weekly Exit": round(weekly_exit, 2) if weekly_exit else "N/A",
-            "Weekly Stop Loss": round(weekly_stop_loss, 2) if weekly_stop_loss else "N/A",
-            "Monthly Buy": round(monthly_buy, 2) if monthly_buy else "N/A",
-            "Monthly Exit": round(monthly_exit, 2) if monthly_exit else "N/A",
-            "Monthly Stop Loss": round(monthly_stop_loss, 2) if monthly_stop_loss else "N/A",
+            "Daily Buy": safe_round(daily_buy),
+            "Daily Exit": safe_round(daily_exit),
+            "Daily Stop Loss": safe_round(daily_stop_loss),
+            "Weekly Buy": safe_round(weekly_buy),
+            "Weekly Exit": safe_round(weekly_exit),
+            "Weekly Stop Loss": safe_round(weekly_stop_loss),
+            "Monthly Buy": safe_round(monthly_buy),
+            "Monthly Exit": safe_round(monthly_exit),
+            "Monthly Stop Loss": safe_round(monthly_stop_loss),
             "Data": data
         }
     except Exception as e:
@@ -111,8 +123,8 @@ for res in results:
     data = res["Data"]
     ticker = res["Ticker"]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode='lines', name="Close Price"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["Upper_BB"], mode='lines', name="Upper Bollinger Band"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["Lower_BB"], mode='lines', name="Lower Bollinger Band"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close Price"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["Upper_BB"], mode="lines", name="Upper Bollinger Band"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["Lower_BB"], mode="lines", name="Lower Bollinger Band"))
     fig.update_layout(title=f"Technical Chart for {ticker}", xaxis_title="Date", yaxis_title="Price")
     st.plotly_chart(fig)
