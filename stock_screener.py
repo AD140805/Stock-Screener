@@ -6,13 +6,13 @@ import streamlit as st
 # Streamlit Config
 st.set_page_config(page_title="Enhanced Stock Screener", page_icon="📈", layout="wide")
 
-# Title
+# App Title
 st.title("📊 Enhanced Indian Stock Screening Tool")
 st.markdown("""
-Analyze **daily**, **weekly**, and **monthly** buy, exit, and stop-loss levels with additional parameters like **MACD**, **Volume Trends**, and **ATR**.
+Analyze **daily**, **weekly**, and **monthly** buy, exit, and stop-loss levels using indicators like **MACD**, **RSI**, and **ATR**.
 """)
 
-# Sidebar
+# Sidebar for Stock Input
 st.sidebar.header("Input Options")
 default_tickers = ["TCS.NS", "RELIANCE.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
 tickers = st.sidebar.text_area("Enter stock tickers (comma-separated):", value=", ".join(default_tickers)).split(",")
@@ -62,34 +62,44 @@ def fetch_and_analyze_data(ticker):
         # Timeframe Levels
         def levels_for_timeframe(data, period):
             data_period = data[-period:]
-            buy = data_period["Lower_BB"].mean()
-            exit = data_period["Upper_BB"].mean()
-            stop_loss = buy - data_period["ATR"].mean()
-            avg_rsi = data_period["RSI"].mean()
-            return buy, exit, stop_loss, avg_rsi
 
-        daily_buy, daily_exit, daily_stop_loss, daily_rsi = levels_for_timeframe(data, 1)
-        weekly_buy, weekly_exit, weekly_stop_loss, weekly_rsi = levels_for_timeframe(data, 5)
-        monthly_buy, monthly_exit, monthly_stop_loss, monthly_rsi = levels_for_timeframe(data, 20)
+            # Buy Level Logic
+            if (data_period["RSI"].iloc[-1] < 30 and
+                data_period["MACD"].iloc[-1] > data_period["Signal_Line"].iloc[-1]):
+                buy = data_period["Lower_BB"].mean()
+            else:
+                buy = None
+
+            # Exit Level Logic
+            if (data_period["RSI"].iloc[-1] > 70 and
+                data_period["MACD"].iloc[-1] < data_period["Signal_Line"].iloc[-1]):
+                exit = data_period["Upper_BB"].mean()
+            else:
+                exit = None
+
+            # Stop Loss Logic
+            if buy:
+                stop_loss = buy - data_period["ATR"].mean()
+            else:
+                stop_loss = None
+
+            return buy, exit, stop_loss
+
+        daily_buy, daily_exit, daily_stop_loss = levels_for_timeframe(data, 1)
+        weekly_buy, weekly_exit, weekly_stop_loss = levels_for_timeframe(data, 5)
+        monthly_buy, monthly_exit, monthly_stop_loss = levels_for_timeframe(data, 20)
 
         return {
             "Ticker": ticker,
-            "Daily Buy": round(daily_buy, 2),
-            "Daily Exit": round(daily_exit, 2),
-            "Daily Stop Loss": round(daily_stop_loss, 2),
-            "Daily RSI": round(daily_rsi, 2),
-            "Weekly Buy": round(weekly_buy, 2),
-            "Weekly Exit": round(weekly_exit, 2),
-            "Weekly Stop Loss": round(weekly_stop_loss, 2),
-            "Weekly RSI": round(weekly_rsi, 2),
-            "Monthly Buy": round(monthly_buy, 2),
-            "Monthly Exit": round(monthly_exit, 2),
-            "Monthly Stop Loss": round(monthly_stop_loss, 2),
-            "Monthly RSI": round(monthly_rsi, 2),
-            "MACD": data["MACD"].iloc[-1],
-            "Signal Line": data["Signal_Line"].iloc[-1],
-            "ATR": data["ATR"].iloc[-1],
-            "Data": data
+            "Daily Buy": round(daily_buy, 2) if daily_buy else None,
+            "Daily Exit": round(daily_exit, 2) if daily_exit else None,
+            "Daily Stop Loss": round(daily_stop_loss, 2) if daily_stop_loss else None,
+            "Weekly Buy": round(weekly_buy, 2) if weekly_buy else None,
+            "Weekly Exit": round(weekly_exit, 2) if weekly_exit else None,
+            "Weekly Stop Loss": round(weekly_stop_loss, 2) if weekly_stop_loss else None,
+            "Monthly Buy": round(monthly_buy, 2) if monthly_buy else None,
+            "Monthly Exit": round(monthly_exit, 2) if monthly_exit else None,
+            "Monthly Stop Loss": round(monthly_stop_loss, 2) if monthly_stop_loss else None,
         }
     except Exception as e:
         return {"Ticker": ticker, "Error": str(e)}
@@ -100,7 +110,7 @@ results = [fetch_and_analyze_data(ticker) for ticker in tickers]
 # Display Results
 st.header("📋 Stock Screening Results")
 summary = [
-    {k: v for k, v in res.items() if k != "Data"} for res in results if "Error" not in res
+    {k: v for k, v in res.items() if k != "Error"} for res in results if "Error" not in res
 ]
 df = pd.DataFrame(summary)
 st.dataframe(df)
