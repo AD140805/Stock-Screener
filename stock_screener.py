@@ -36,9 +36,13 @@ def fetch_and_analyze_data(ticker):
         # Fetch historical stock data
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
-        
+
+        # Ensure data is available
+        if data.empty:
+            return {"Ticker": ticker, "Error": "No historical data available"}
+
         # Calculate Indicators
-        data["StochRSI"] = calculate_stoch_rsi(data)  # Calculate Stochastic RSI
+        data["StochRSI"] = calculate_stoch_rsi(data)  # Stochastic RSI
         data["50_MA"] = data["Close"].rolling(window=50).mean()  # 50-day Moving Average
         data["200_MA"] = data["Close"].rolling(window=200).mean()  # 200-day Moving Average
         data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()  # Upper Bollinger Band
@@ -46,18 +50,34 @@ def fetch_and_analyze_data(ticker):
 
         # Handle cases where Stochastic RSI cannot be calculated
         if data["StochRSI"].isnull().all():
-            avg_stoch_rsi = "Insufficient data"
+            avg_stoch_rsi = None
         else:
-            avg_stoch_rsi = data["StochRSI"].iloc[-1]  # Use the latest Stochastic RSI value
+            avg_stoch_rsi = data["StochRSI"].iloc[-1]  # Latest StochRSI value
 
-        # Timeframe-Specific Calculations (Daily, Weekly, Monthly)
+        # Timeframe-Specific Calculations
         def levels_for_timeframe(data, period, stoch_threshold=0.2):
-            # Use the last `period` data points
-            data_period = data[-period:]
-            avg_stoch_rsi = data_period["StochRSI"].mean()  # Average Stochastic RSI for the period
-            buy = data_period["Lower_BB"].mean() if avg_stoch_rsi < stoch_threshold else None  # Buy level
-            exit = data_period["Upper_BB"].mean() if avg_stoch_rsi > (1 - stoch_threshold) else None  # Exit level
-            stop_loss = buy * 0.97 if buy else None  # Stop-loss level
+            data_period = data[-period:]  # Last `period` rows
+            if data_period.empty:
+                return None, None, None, None  # Fallback for insufficient data
+
+            avg_stoch_rsi = data_period["StochRSI"].mean()
+
+            # Use Bollinger Bands as fallback
+            buy = data_period["Lower_BB"].mean()
+            exit = data_period["Upper_BB"].mean()
+            stop_loss = buy * 0.97 if buy else None  # 3% below buy price
+
+            # Adjust levels based on StochRSI thresholds
+            if avg_stoch_rsi is not None:
+                if avg_stoch_rsi < stoch_threshold:
+                    buy = buy  # Confirm buy level
+                else:
+                    buy = None
+                if avg_stoch_rsi > (1 - stoch_threshold):
+                    exit = exit  # Confirm exit level
+                else:
+                    exit = None
+
             return buy, exit, stop_loss, avg_stoch_rsi
 
         # Daily, Weekly, Monthly Levels
