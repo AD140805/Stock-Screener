@@ -63,11 +63,17 @@ def fetch_and_analyze_data(ticker):
             stop_loss = buy * 0.97 if buy else None
 
             # Adjust levels based on RSI thresholds
-            if avg_rsi is not None:
-                if avg_rsi >= 30:  # RSI indicates no buy
-                    buy = None
-                if avg_rsi <= 70:  # RSI indicates no exit
-                    exit = None
+            # Buy only if RSI < 30, otherwise use Lower BB
+            if avg_rsi < 30:
+                buy = buy
+            else:
+                buy = None
+
+            # Exit only if RSI > 70, otherwise use Upper BB
+            if avg_rsi > 70:
+                exit = exit
+            else:
+                exit = None
 
             return buy, exit, stop_loss, avg_rsi
 
