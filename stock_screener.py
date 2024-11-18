@@ -3,10 +3,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# Web App: Indian Stock Screener with RSI Integration
-st.title("Indian Stock Screening Tool with RSI Integration")
+# Web App: Indian Stock Screener with Stochastic RSI
+st.title("Indian Stock Screening Tool with Stochastic RSI")
 st.write("""
-### Analyze daily, weekly, and monthly buy, exit, and stop-loss levels using RSI.
+### Analyze buy, exit, and stop-loss levels using Stochastic RSI for Indian stocks.
 """)
 
 # Sidebar for User Input
@@ -17,13 +17,18 @@ tickers = st.sidebar.text_area(
     value=", ".join(default_tickers)
 ).split(",")
 
-# RSI Calculation Function
-def calculate_rsi(data, period=14):
+# Function to Calculate Stochastic RSI
+def calculate_stoch_rsi(data, period=14):
+    # Calculate RSI
     delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
     rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Calculate Stochastic RSI
+    stoch_rsi = (rsi - rsi.rolling(window=period).min()) / (rsi.rolling(window=period).max() - rsi.rolling(window=period).min())
+    return stoch_rsi
 
 # Function to Fetch and Analyze Data
 def fetch_and_analyze_data(ticker):
@@ -31,41 +36,29 @@ def fetch_and_analyze_data(ticker):
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
         
-        # Calculate Technical Indicators
-        data["RSI"] = calculate_rsi(data)
+        # Calculate Indicators
+        data["StochRSI"] = calculate_stoch_rsi(data)
         data["50_MA"] = data["Close"].rolling(window=50).mean()
         data["200_MA"] = data["Close"].rolling(window=200).mean()
         data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
         data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
 
-        # Timeframe-Specific Calculations
-        def levels_for_timeframe(data, period):
-            data_period = data[-period:]
-            buy = data_period["Lower_BB"].mean()
-            exit = data_period["Upper_BB"].mean()
-            stop_loss = buy * 0.97
-            avg_rsi = data_period["RSI"].mean()
-            return buy, exit, stop_loss, avg_rsi
+        # Suggested Levels Based on Stochastic RSI
+        def levels_based_on_stoch_rsi(data, stoch_threshold=0.2):
+            last_stoch_rsi = data["StochRSI"].iloc[-1]
+            buy = data["Lower_BB"].iloc[-1] if last_stoch_rsi < stoch_threshold else None
+            exit = data["Upper_BB"].iloc[-1] if last_stoch_rsi > 1 - stoch_threshold else None
+            stop_loss = buy * 0.97 if buy else None
+            return buy, exit, stop_loss, last_stoch_rsi
 
-        # Daily, Weekly, Monthly Levels
-        daily_buy, daily_exit, daily_stop_loss, daily_rsi = levels_for_timeframe(data, 1)
-        weekly_buy, weekly_exit, weekly_stop_loss, weekly_rsi = levels_for_timeframe(data, 5)
-        monthly_buy, monthly_exit, monthly_stop_loss, monthly_rsi = levels_for_timeframe(data, 20)
+        buy_price, exit_price, stop_loss, last_stoch_rsi = levels_based_on_stoch_rsi(data)
 
         return {
             "Ticker": ticker,
-            "Daily Buy Price": round(daily_buy, 2),
-            "Daily Exit Price": round(daily_exit, 2),
-            "Daily Stop Loss": round(daily_stop_loss, 2),
-            "Daily RSI": round(daily_rsi, 2),
-            "Weekly Buy Price": round(weekly_buy, 2),
-            "Weekly Exit Price": round(weekly_exit, 2),
-            "Weekly Stop Loss": round(weekly_stop_loss, 2),
-            "Weekly RSI": round(weekly_rsi, 2),
-            "Monthly Buy Price": round(monthly_buy, 2),
-            "Monthly Exit Price": round(monthly_exit, 2),
-            "Monthly Stop Loss": round(monthly_stop_loss, 2),
-            "Monthly RSI": round(monthly_rsi, 2),
+            "Buy Price": round(buy_price, 2) if buy_price else "N/A",
+            "Exit Price": round(exit_price, 2) if exit_price else "N/A",
+            "Stop Loss": round(stop_loss, 2) if stop_loss else "N/A",
+            "StochRSI": round(last_stoch_rsi, 2) if last_stoch_rsi else "N/A",
         }
     except Exception as e:
         return {"Ticker": ticker, "Error": str(e)}
@@ -80,7 +73,26 @@ summary = [
 df = pd.DataFrame(summary)
 
 # Display Results
-st.header("Stock Screening Results with RSI Integration")
+st.header("Stock Screening Results with Stochastic RSI")
 if not df.empty:
     st.dataframe(df)
     st.download_button("Download Results as CSV", df.to_csv(index=False), "stock_screening_results.csv")
+
+# Display Technical Charts
+st.header("Technical Charts")
+for result in results:
+    if "Error" in result:
+        st.write(f"Error fetching data for {result['Ticker']}: {result['Error']}")
+        continue
+
+    ticker = result["Ticker"]
+    st.write(f"Stochastic RSI Chart for {ticker}")
+    data = yf.Ticker(ticker.strip()).history(period="6mo")
+    data["StochRSI"] = calculate_stoch_rsi(data)
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(data.index, data["StochRSI"], label="Stochastic RSI", color="purple")
+    ax.axhline(0.2, color="green", linestyle="--", label="Oversold (0.2)")
+    ax.axhline(0.8, color="red", linestyle="--", label="Overbought (0.8)")
+    ax.legend()
+    st.pyplot(fig)
