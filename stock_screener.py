@@ -4,18 +4,21 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # Streamlit Config
-st.set_page_config(page_title="Enhanced Stock Screener", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Stock Screener", page_icon="📈", layout="wide")
 
 # Title
-st.title("📊 Enhanced Indian Stock Screening Tool")
+st.title("📊 Indian Stock Screening Tool")
 st.markdown("""
-Analyze **daily**, **weekly**, and **monthly** buy, exit, and stop-loss levels using advanced parameters like **RSI** and **ATR**.
+Get **daily**, **weekly**, and **monthly** buy, exit, and stop-loss levels for Indian stocks using **RSI**, **ATR**, and Bollinger Bands.
 """)
 
-# Sidebar
+# Sidebar Input
 st.sidebar.header("Input Options")
 default_tickers = ["TCS.NS", "RELIANCE.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
-tickers = st.sidebar.text_area("Enter stock tickers (comma-separated):", value=", ".join(default_tickers)).split(",")
+tickers = st.sidebar.text_area(
+    "Enter stock tickers (comma-separated):",
+    value=", ".join(default_tickers)
+).split(",")
 
 # Indicator Functions
 def calculate_rsi(data, period=14):
@@ -45,58 +48,55 @@ def fetch_and_analyze_data(ticker):
     try:
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
-        
-        # Handle insufficient data
+
+        # Check for sufficient data
         if len(data) < 20:
-            return {"Ticker": ticker, "Error": "Insufficient data for analysis"}
+            return {"Ticker": ticker, "Error": "Not enough data to compute indicators"}
 
         # Calculate Indicators
         data["RSI"] = calculate_rsi(data)
         data["ATR"] = calculate_atr(data)
         data["Upper_BB"], data["Lower_BB"] = calculate_bollinger_bands(data)
 
+        # Debugging: Print intermediate data if needed
+        # st.write(f"Debug for {ticker}:", data.tail())
+
         # Timeframe Levels
-        def levels_for_timeframe(data, period):
-            data_period = data[-period:]
+        def calculate_levels(data_period):
+            if len(data_period) < 1:
+                return None, None, None  # Return empty levels if data is insufficient
 
-            # Validate data availability
-            if len(data_period) < period:
-                return None, None, None
-
-            # Determine Buy Price
+            # Buy Price: Lower Bollinger Band and RSI < 30
             lower_bb = data_period["Lower_BB"].iloc[-1]
             rsi = data_period["RSI"].iloc[-1]
-            buy = lower_bb if rsi < 30 else None
+            buy_price = lower_bb if rsi < 30 else None
 
-            # Determine Exit Price
+            # Exit Price: Upper Bollinger Band and RSI > 70
             upper_bb = data_period["Upper_BB"].iloc[-1]
-            exit = upper_bb if rsi > 70 else None
+            exit_price = upper_bb if rsi > 70 else None
 
-            # Determine Stop Loss
+            # Stop Loss: Buy Price - ATR
             atr = data_period["ATR"].iloc[-1]
-            stop_loss = buy - atr if buy else None
+            stop_loss = buy_price - atr if buy_price else None
 
-            return buy, exit, stop_loss
+            return buy_price, exit_price, stop_loss
 
-        daily_buy, daily_exit, daily_stop_loss = levels_for_timeframe(data, 1)
-        weekly_buy, weekly_exit, weekly_stop_loss = levels_for_timeframe(data, 5)
-        monthly_buy, monthly_exit, monthly_stop_loss = levels_for_timeframe(data, 20)
-
-        # Handle cases where levels are None
-        def safe_round(value):
-            return round(value, 2) if value is not None else "N/A"
+        # Calculate Levels for Different Timeframes
+        daily_buy, daily_exit, daily_stop_loss = calculate_levels(data[-1:])
+        weekly_buy, weekly_exit, weekly_stop_loss = calculate_levels(data[-5:])
+        monthly_buy, monthly_exit, monthly_stop_loss = calculate_levels(data[-20:])
 
         return {
             "Ticker": ticker,
-            "Daily Buy": safe_round(daily_buy),
-            "Daily Exit": safe_round(daily_exit),
-            "Daily Stop Loss": safe_round(daily_stop_loss),
-            "Weekly Buy": safe_round(weekly_buy),
-            "Weekly Exit": safe_round(weekly_exit),
-            "Weekly Stop Loss": safe_round(weekly_stop_loss),
-            "Monthly Buy": safe_round(monthly_buy),
-            "Monthly Exit": safe_round(monthly_exit),
-            "Monthly Stop Loss": safe_round(monthly_stop_loss),
+            "Daily Buy": round(daily_buy, 2) if daily_buy else "N/A",
+            "Daily Exit": round(daily_exit, 2) if daily_exit else "N/A",
+            "Daily Stop Loss": round(daily_stop_loss, 2) if daily_stop_loss else "N/A",
+            "Weekly Buy": round(weekly_buy, 2) if weekly_buy else "N/A",
+            "Weekly Exit": round(weekly_exit, 2) if weekly_exit else "N/A",
+            "Weekly Stop Loss": round(weekly_stop_loss, 2) if weekly_stop_loss else "N/A",
+            "Monthly Buy": round(monthly_buy, 2) if monthly_buy else "N/A",
+            "Monthly Exit": round(monthly_exit, 2) if monthly_exit else "N/A",
+            "Monthly Stop Loss": round(monthly_stop_loss, 2) if monthly_stop_loss else "N/A",
             "Data": data
         }
     except Exception as e:
@@ -111,7 +111,10 @@ summary = [
     {k: v for k, v in res.items() if k != "Data"} for res in results if "Error" not in res
 ]
 df = pd.DataFrame(summary)
-st.dataframe(df)
+if not df.empty:
+    st.dataframe(df)
+else:
+    st.warning("No valid data to display. Please check the tickers or try again.")
 
 # Plot Charts
 st.header("📊 Technical Charts")
