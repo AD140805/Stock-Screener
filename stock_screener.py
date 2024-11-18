@@ -3,10 +3,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# Web App: Indian Stock Screener with Stochastic RSI
-st.title("Indian Stock Screening Tool with Stochastic RSI")
+# Web App: Indian Stock Screener with Stochastic RSI and Multi-Timeframes
+st.title("Indian Stock Screening Tool with Stochastic RSI and Timeframes")
 st.write("""
-### Analyze buy, exit, and stop-loss levels using Stochastic RSI for Indian stocks.
+### Analyze daily, weekly, and monthly buy, exit, and stop-loss levels using Stochastic RSI.
 """)
 
 # Sidebar for User Input
@@ -43,22 +43,34 @@ def fetch_and_analyze_data(ticker):
         data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
         data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
 
-        # Suggested Levels Based on Stochastic RSI
-        def levels_based_on_stoch_rsi(data, stoch_threshold=0.2):
-            last_stoch_rsi = data["StochRSI"].iloc[-1]
-            buy = data["Lower_BB"].iloc[-1] if last_stoch_rsi < stoch_threshold else None
-            exit = data["Upper_BB"].iloc[-1] if last_stoch_rsi > 1 - stoch_threshold else None
+        # Timeframe-Specific Calculations
+        def levels_for_timeframe(data, period, stoch_threshold=0.2):
+            data_period = data[-period:]
+            avg_stoch_rsi = data_period["StochRSI"].mean()
+            buy = data_period["Lower_BB"].mean() if avg_stoch_rsi < stoch_threshold else None
+            exit = data_period["Upper_BB"].mean() if avg_stoch_rsi > 1 - stoch_threshold else None
             stop_loss = buy * 0.97 if buy else None
-            return buy, exit, stop_loss, last_stoch_rsi
+            return buy, exit, stop_loss, avg_stoch_rsi
 
-        buy_price, exit_price, stop_loss, last_stoch_rsi = levels_based_on_stoch_rsi(data)
+        # Daily, Weekly, Monthly Levels
+        daily_buy, daily_exit, daily_stop_loss, daily_stoch_rsi = levels_for_timeframe(data, 1)
+        weekly_buy, weekly_exit, weekly_stop_loss, weekly_stoch_rsi = levels_for_timeframe(data, 5)
+        monthly_buy, monthly_exit, monthly_stop_loss, monthly_stoch_rsi = levels_for_timeframe(data, 20)
 
         return {
             "Ticker": ticker,
-            "Buy Price": round(buy_price, 2) if buy_price else "N/A",
-            "Exit Price": round(exit_price, 2) if exit_price else "N/A",
-            "Stop Loss": round(stop_loss, 2) if stop_loss else "N/A",
-            "StochRSI": round(last_stoch_rsi, 2) if last_stoch_rsi else "N/A",
+            "Daily Buy Price": round(daily_buy, 2) if daily_buy else "N/A",
+            "Daily Exit Price": round(daily_exit, 2) if daily_exit else "N/A",
+            "Daily Stop Loss": round(daily_stop_loss, 2) if daily_stop_loss else "N/A",
+            "Daily StochRSI": round(daily_stoch_rsi, 2) if daily_stoch_rsi else "N/A",
+            "Weekly Buy Price": round(weekly_buy, 2) if weekly_buy else "N/A",
+            "Weekly Exit Price": round(weekly_exit, 2) if weekly_exit else "N/A",
+            "Weekly Stop Loss": round(weekly_stop_loss, 2) if weekly_stop_loss else "N/A",
+            "Weekly StochRSI": round(weekly_stoch_rsi, 2) if weekly_stoch_rsi else "N/A",
+            "Monthly Buy Price": round(monthly_buy, 2) if monthly_buy else "N/A",
+            "Monthly Exit Price": round(monthly_exit, 2) if monthly_exit else "N/A",
+            "Monthly Stop Loss": round(monthly_stop_loss, 2) if monthly_stop_loss else "N/A",
+            "Monthly StochRSI": round(monthly_stoch_rsi, 2) if monthly_stoch_rsi else "N/A",
         }
     except Exception as e:
         return {"Ticker": ticker, "Error": str(e)}
@@ -73,13 +85,13 @@ summary = [
 df = pd.DataFrame(summary)
 
 # Display Results
-st.header("Stock Screening Results with Stochastic RSI")
+st.header("Stock Screening Results with Stochastic RSI and Timeframes")
 if not df.empty:
     st.dataframe(df)
     st.download_button("Download Results as CSV", df.to_csv(index=False), "stock_screening_results.csv")
 
-# Display Technical Charts
-st.header("Technical Charts")
+# Display Stochastic RSI Charts
+st.header("Stochastic RSI Charts")
 for result in results:
     if "Error" in result:
         st.write(f"Error fetching data for {result['Ticker']}: {result['Error']}")
