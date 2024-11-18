@@ -53,6 +53,10 @@ def fetch_and_analyze_data(ticker):
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
         
+        # Validate data
+        if data.empty:
+            raise ValueError(f"No data available for {ticker}")
+
         # Calculate Indicators
         data["RSI"] = calculate_rsi(data)
         data["MACD"], data["Signal_Line"] = calculate_macd(data)
@@ -100,9 +104,10 @@ def fetch_and_analyze_data(ticker):
             "Monthly Buy": round(monthly_buy, 2) if monthly_buy else None,
             "Monthly Exit": round(monthly_exit, 2) if monthly_exit else None,
             "Monthly Stop Loss": round(monthly_stop_loss, 2) if monthly_stop_loss else None,
+            "Data": data
         }
     except Exception as e:
-        return {"Ticker": ticker, "Error": str(e)}
+        return {"Ticker": ticker, "Error": str(e), "Data": None}
 
 # Process All Tickers
 results = [fetch_and_analyze_data(ticker) for ticker in tickers]
@@ -110,7 +115,7 @@ results = [fetch_and_analyze_data(ticker) for ticker in tickers]
 # Display Results
 st.header("📋 Stock Screening Results")
 summary = [
-    {k: v for k, v in res.items() if k != "Error"} for res in results if "Error" not in res
+    {k: v for k, v in res.items() if k != "Data"} for res in results if "Error" not in res
 ]
 df = pd.DataFrame(summary)
 st.dataframe(df)
@@ -118,8 +123,8 @@ st.dataframe(df)
 # Plot Charts
 st.header("📊 Technical Charts")
 for res in results:
-    if "Error" in res:
-        st.warning(f"Error fetching data for {res['Ticker']}: {res['Error']}")
+    if not res.get("Data"):
+        st.warning(f"Error fetching data for {res['Ticker']}: {res.get('Error', 'Unknown Error')}")
         continue
 
     data = res["Data"]
