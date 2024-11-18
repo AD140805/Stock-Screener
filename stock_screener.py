@@ -33,23 +33,31 @@ def calculate_stoch_rsi(data, period=14):
 # Function to Fetch and Analyze Data
 def fetch_and_analyze_data(ticker):
     try:
+        # Fetch historical stock data
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
         
         # Calculate Indicators
-        data["StochRSI"] = calculate_stoch_rsi(data)
-        data["50_MA"] = data["Close"].rolling(window=50).mean()
-        data["200_MA"] = data["Close"].rolling(window=200).mean()
-        data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
-        data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
+        data["StochRSI"] = calculate_stoch_rsi(data)  # Calculate Stochastic RSI
+        data["50_MA"] = data["Close"].rolling(window=50).mean()  # 50-day Moving Average
+        data["200_MA"] = data["Close"].rolling(window=200).mean()  # 200-day Moving Average
+        data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()  # Upper Bollinger Band
+        data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()  # Lower Bollinger Band
 
-        # Timeframe-Specific Calculations
+        # Handle cases where Stochastic RSI cannot be calculated
+        if data["StochRSI"].isnull().all():
+            avg_stoch_rsi = "Insufficient data"
+        else:
+            avg_stoch_rsi = data["StochRSI"].iloc[-1]  # Use the latest Stochastic RSI value
+
+        # Timeframe-Specific Calculations (Daily, Weekly, Monthly)
         def levels_for_timeframe(data, period, stoch_threshold=0.2):
+            # Use the last `period` data points
             data_period = data[-period:]
-            avg_stoch_rsi = data_period["StochRSI"].mean()
-            buy = data_period["Lower_BB"].mean() if avg_stoch_rsi < stoch_threshold else None
-            exit = data_period["Upper_BB"].mean() if avg_stoch_rsi > 1 - stoch_threshold else None
-            stop_loss = buy * 0.97 if buy else None
+            avg_stoch_rsi = data_period["StochRSI"].mean()  # Average Stochastic RSI for the period
+            buy = data_period["Lower_BB"].mean() if avg_stoch_rsi < stoch_threshold else None  # Buy level
+            exit = data_period["Upper_BB"].mean() if avg_stoch_rsi > (1 - stoch_threshold) else None  # Exit level
+            stop_loss = buy * 0.97 if buy else None  # Stop-loss level
             return buy, exit, stop_loss, avg_stoch_rsi
 
         # Daily, Weekly, Monthly Levels
@@ -57,22 +65,24 @@ def fetch_and_analyze_data(ticker):
         weekly_buy, weekly_exit, weekly_stop_loss, weekly_stoch_rsi = levels_for_timeframe(data, 5)
         monthly_buy, monthly_exit, monthly_stop_loss, monthly_stoch_rsi = levels_for_timeframe(data, 20)
 
+        # Return results as a dictionary
         return {
             "Ticker": ticker,
             "Daily Buy Price": round(daily_buy, 2) if daily_buy else "N/A",
             "Daily Exit Price": round(daily_exit, 2) if daily_exit else "N/A",
             "Daily Stop Loss": round(daily_stop_loss, 2) if daily_stop_loss else "N/A",
-            "Daily StochRSI": round(daily_stoch_rsi, 2) if daily_stoch_rsi else "N/A",
+            "Daily StochRSI": round(daily_stoch_rsi, 2) if isinstance(daily_stoch_rsi, (int, float)) else "N/A",
             "Weekly Buy Price": round(weekly_buy, 2) if weekly_buy else "N/A",
             "Weekly Exit Price": round(weekly_exit, 2) if weekly_exit else "N/A",
             "Weekly Stop Loss": round(weekly_stop_loss, 2) if weekly_stop_loss else "N/A",
-            "Weekly StochRSI": round(weekly_stoch_rsi, 2) if weekly_stoch_rsi else "N/A",
+            "Weekly StochRSI": round(weekly_stoch_rsi, 2) if isinstance(weekly_stoch_rsi, (int, float)) else "N/A",
             "Monthly Buy Price": round(monthly_buy, 2) if monthly_buy else "N/A",
             "Monthly Exit Price": round(monthly_exit, 2) if monthly_exit else "N/A",
             "Monthly Stop Loss": round(monthly_stop_loss, 2) if monthly_stop_loss else "N/A",
-            "Monthly StochRSI": round(monthly_stoch_rsi, 2) if monthly_stoch_rsi else "N/A",
+            "Monthly StochRSI": round(monthly_stoch_rsi, 2) if isinstance(monthly_stoch_rsi, (int, float)) else "N/A",
         }
     except Exception as e:
+        # Return the error for debugging
         return {"Ticker": ticker, "Error": str(e)}
 
 # Fetch and Analyze Data for All Tickers
