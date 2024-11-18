@@ -3,10 +3,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# Web App: Indian Stock Screener with Technical Analysis
-st.title("Indian Stock Screening Tool with Technical Analysis")
+# Web App: Indian Stock Screener with Buy/Sell Suggestions
+st.title("Indian Stock Screening Tool with Buy/Sell Suggestions")
 st.write("""
 ### Analyze fundamental and technical indicators for Indian stocks.
+This tool also suggests potential buy prices, exit points, and stop loss levels.
 """)
 
 # Sidebar for User Input
@@ -29,6 +30,15 @@ def fetch_and_analyze_data(ticker):
         data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
         data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
         rsi = 100 - (100 / (1 + data["Close"].pct_change().mean()))
+        
+        # Suggested Buy Price: Near Lower Bollinger Band or Support Level
+        buy_price = data["Lower_BB"][-1]
+
+        # Suggested Exit Price: Near Upper Bollinger Band or Resistance Level
+        exit_price = data["Upper_BB"][-1]
+
+        # Suggested Stop Loss: Slightly Below Support Level
+        stop_loss = buy_price * 0.97  # 3% below buy price
 
         # Fundamental Metrics
         info = stock.info
@@ -54,6 +64,9 @@ def fetch_and_analyze_data(ticker):
             "D/E": debt_to_equity,
             "Market Cap (₹ Cr)": market_cap / 1e7 if market_cap else None,
             "RSI": round(rsi, 2),
+            "Buy Price": round(buy_price, 2),
+            "Exit Price": round(exit_price, 2),
+            "Stop Loss": round(stop_loss, 2),
             "Score": score,
             "Data": data
         }
