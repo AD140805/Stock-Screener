@@ -3,10 +3,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# Web App: Indian Stock Screener with Enhanced Technical Indicators
-st.title("Indian Stock Screening Tool with Enhanced Technical Analysis")
+# Web App: Indian Stock Screener with RSI Integration
+st.title("Indian Stock Screening Tool with RSI Integration")
 st.write("""
-### Analyze buy, exit, and stop-loss levels with MACD, Volume, and ATR.
+### Analyze daily, weekly, and monthly buy, exit, and stop-loss levels using RSI.
 """)
 
 # Sidebar for User Input
@@ -17,22 +17,13 @@ tickers = st.sidebar.text_area(
     value=", ".join(default_tickers)
 ).split(",")
 
-# MACD Calculation
-def calculate_macd(data, short_window=12, long_window=26, signal_window=9):
-    short_ema = data['Close'].ewm(span=short_window, adjust=False).mean()
-    long_ema = data['Close'].ewm(span=long_window, adjust=False).mean()
-    macd = short_ema - long_ema
-    signal = macd.ewm(span=signal_window, adjust=False).mean()
-    return macd, signal
-
-# ATR Calculation
-def calculate_atr(data, period=14):
-    data['High-Low'] = data['High'] - data['Low']
-    data['High-Close'] = abs(data['High'] - data['Close'].shift())
-    data['Low-Close'] = abs(data['Low'] - data['Close'].shift())
-    true_range = data[['High-Low', 'High-Close', 'Low-Close']].max(axis=1)
-    atr = true_range.rolling(window=period).mean()
-    return atr
+# RSI Calculation Function
+def calculate_rsi(data, period=14):
+    delta = data['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
 
 # Function to Fetch and Analyze Data
 def fetch_and_analyze_data(ticker):
@@ -40,27 +31,41 @@ def fetch_and_analyze_data(ticker):
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
         
-        # Calculate Indicators
-        macd, signal = calculate_macd(data)
-        atr = calculate_atr(data)
-        data["MACD"] = macd
-        data["Signal"] = signal
-        data["ATR"] = atr
+        # Calculate Technical Indicators
+        data["RSI"] = calculate_rsi(data)
         data["50_MA"] = data["Close"].rolling(window=50).mean()
         data["200_MA"] = data["Close"].rolling(window=200).mean()
         data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
         data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
 
-        # Signals
-        buy_signal = data.iloc[-1]["Lower_BB"] if data.iloc[-1]["MACD"] > data.iloc[-1]["Signal"] else None
-        exit_signal = data.iloc[-1]["Upper_BB"] if data.iloc[-1]["MACD"] < data.iloc[-1]["Signal"] else None
-        stop_loss = buy_signal - (1.5 * data.iloc[-1]["ATR"]) if buy_signal else None
+        # Timeframe-Specific Calculations
+        def levels_for_timeframe(data, period):
+            data_period = data[-period:]
+            buy = data_period["Lower_BB"].mean()
+            exit = data_period["Upper_BB"].mean()
+            stop_loss = buy * 0.97
+            avg_rsi = data_period["RSI"].mean()
+            return buy, exit, stop_loss, avg_rsi
+
+        # Daily, Weekly, Monthly Levels
+        daily_buy, daily_exit, daily_stop_loss, daily_rsi = levels_for_timeframe(data, 1)
+        weekly_buy, weekly_exit, weekly_stop_loss, weekly_rsi = levels_for_timeframe(data, 5)
+        monthly_buy, monthly_exit, monthly_stop_loss, monthly_rsi = levels_for_timeframe(data, 20)
 
         return {
             "Ticker": ticker,
-            "Buy Price": round(buy_signal, 2) if buy_signal else None,
-            "Exit Price": round(exit_signal, 2) if exit_signal else None,
-            "Stop Loss": round(stop_loss, 2) if stop_loss else None,
+            "Daily Buy Price": round(daily_buy, 2),
+            "Daily Exit Price": round(daily_exit, 2),
+            "Daily Stop Loss": round(daily_stop_loss, 2),
+            "Daily RSI": round(daily_rsi, 2),
+            "Weekly Buy Price": round(weekly_buy, 2),
+            "Weekly Exit Price": round(weekly_exit, 2),
+            "Weekly Stop Loss": round(weekly_stop_loss, 2),
+            "Weekly RSI": round(weekly_rsi, 2),
+            "Monthly Buy Price": round(monthly_buy, 2),
+            "Monthly Exit Price": round(monthly_exit, 2),
+            "Monthly Stop Loss": round(monthly_stop_loss, 2),
+            "Monthly RSI": round(monthly_rsi, 2),
         }
     except Exception as e:
         return {"Ticker": ticker, "Error": str(e)}
@@ -75,7 +80,7 @@ summary = [
 df = pd.DataFrame(summary)
 
 # Display Results
-st.header("Stock Screening Results with Enhanced Technical Analysis")
+st.header("Stock Screening Results with RSI Integration")
 if not df.empty:
     st.dataframe(df)
     st.download_button("Download Results as CSV", df.to_csv(index=False), "stock_screening_results.csv")
