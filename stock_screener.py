@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from datetime import datetime, timedelta
 
 # Streamlit Config
 st.set_page_config(page_title="Stock Screener", page_icon="📈", layout="wide")
@@ -56,31 +57,28 @@ def fetch_and_analyze_data(ticker):
         data["ATR"] = calculate_atr(data)
         data["Upper_BB"], data["Lower_BB"] = calculate_bollinger_bands(data)
 
-        # Resample Data for Weekly and Monthly
-        data_weekly = data.resample('W').agg({
-            'Open': 'first',
-            'High': 'max',
-            'Low': 'min',
-            'Close': 'last',
-            'Volume': 'sum'
-        }).dropna()
+        # Define current date
+        current_date = datetime.now().date()
 
-        data_monthly = data.resample('M').agg({
-            'Open': 'first',
-            'High': 'max',
-            'Low': 'min',
-            'Close': 'last',
-            'Volume': 'sum'
-        }).dropna()
+        # Filter data for the current day
+        daily_data = data[data.index.date == current_date]
 
-        # Recalculate Indicators for Weekly and Monthly
-        data_weekly["RSI"] = calculate_rsi(data_weekly)
-        data_weekly["ATR"] = calculate_atr(data_weekly)
-        data_weekly["Upper_BB"], data_weekly["Lower_BB"] = calculate_bollinger_bands(data_weekly)
+        # Calculate start and end of the current week
+        start_of_week = current_date - timedelta(days=current_date.weekday())
+        end_of_week = start_of_week + timedelta(days=6)
 
-        data_monthly["RSI"] = calculate_rsi(data_monthly)
-        data_monthly["ATR"] = calculate_atr(data_monthly)
-        data_monthly["Upper_BB"], data_monthly["Lower_BB"] = calculate_bollinger_bands(data_monthly)
+        # Filter data for the current week
+        weekly_data = data[(data.index.date >= start_of_week) & (data.index.date <= end_of_week)]
+
+        # Calculate start and end of the current month
+        start_of_month = current_date.replace(day=1)
+        if current_date.month == 12:
+            end_of_month = current_date.replace(day=31)
+        else:
+            end_of_month = (current_date.replace(month=current_date.month + 1, day=1) - timedelta(days=1)).date()
+
+        # Filter data for the current month
+        monthly_data = data[(data.index.date >= start_of_month) & (data.index.date <= end_of_month)]
 
         # Level Calculation Function
         def calculate_levels(data_period):
@@ -100,15 +98,9 @@ def fetch_and_analyze_data(ticker):
             return buy_price, exit_price, stop_loss
 
         # Calculate Levels for Each Timeframe
-        daily_buy, daily_exit, daily_stop_loss = calculate_levels(data[-1:])
-        weekly_buy, weekly_exit, weekly_stop_loss = calculate_levels(data_weekly[-1:])
-        monthly_buy, monthly_exit, monthly_stop_loss = calculate_levels(data_monthly[-1:])
-
-        # Debug Outputs for Validation
-        st.write(f"Debugging {ticker}:")
-        st.write("Daily Data Sample", data.tail())
-        st.write("Weekly Data Sample", data_weekly.tail())
-        st.write("Monthly Data Sample", data_monthly.tail())
+        daily_buy, daily_exit, daily_stop_loss = calculate_levels(daily_data)
+        weekly_buy, weekly_exit, weekly_stop_loss = calculate_levels(weekly_data)
+        monthly_buy, monthly_exit, monthly_stop_loss = calculate_levels(monthly_data)
 
         return {
             "Ticker": ticker,
@@ -151,7 +143,6 @@ for res in results:
     ticker = res["Ticker"]
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close Price"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["Upper_BB"], mode="lines", name="Upper Bollinger Band"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["Lower_BB"], mode="lines", name="Lower Bollinger Band"))
-    fig.update_layout(title=f"Technical Chart for {ticker}", xaxis_title="Date", yaxis_title="Price")
-    st.plotly_chart(fig)
+    fig.add_trace
+::contentReference[oaicite:0]{index=0}
+ 
