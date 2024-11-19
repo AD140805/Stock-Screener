@@ -69,7 +69,7 @@ def fetch_and_analyze_data(ticker):
             buy = data_period["Lower_BB"].mean()
             sell = data_period["Upper_BB"].mean()
             atr = data_period["ATR"].mean()
-            return (buy - atr, buy + atr), (sell - atr, sell + atr), buy - (2 * atr)
+            return (round(buy - atr, 2), round(buy + atr, 2)), (round(sell - atr, 2), round(sell + atr, 2)), round(buy - (2 * atr), 2)
 
         daily_data = data[-1:]
         weekly_data = data[-5:]
@@ -130,6 +130,14 @@ for res in results:
     fig.add_trace(go.Scatter(x=data.index, y=data["Upper_BB"], mode='lines', name="Upper Bollinger Band"))
     fig.add_trace(go.Scatter(x=data.index, y=data["Lower_BB"], mode='lines', name="Lower Bollinger Band"))
     fig.add_trace(go.Bar(x=data.index, y=data["Volume"], name="Volume", opacity=0.3))
+
+    # Highlight Buy/Sell Ranges
+    fig.add_shape(type="rect", x0=data.index[0], x1=data.index[-1],
+                  y0=res["Daily Buy Range"][0], y1=res["Daily Buy Range"][1],
+                  fillcolor="green", opacity=0.1, line_width=0, name="Daily Buy Range")
+    fig.add_shape(type="rect", x0=data.index[0], x1=data.index[-1],
+                  y0=res["Daily Sell Range"][0], y1=res["Daily Sell Range"][1],
+                  fillcolor="red", opacity=0.1, line_width=0, name="Daily Sell Range")
 
     fig.update_layout(title=f"Technical Chart for {ticker}", xaxis_title="Date", yaxis_title="Price")
     st.plotly_chart(fig)
