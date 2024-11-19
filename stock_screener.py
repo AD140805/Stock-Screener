@@ -33,55 +33,57 @@ def fetch_and_analyze_data(ticker):
     try:
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
-        
-        # Calculate Indicators
-        data["RSI"] = calculate_rsi(data)
-        data["50_MA"] = data["Close"].rolling(window=50).mean()
-        data["200_MA"] = data["Close"].rolling(window=200).mean()
-        data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
-        data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
 
-        # Define ranges for buy and sell
-        def levels_for_timeframe(data, period, buffer_percent=2):
-            data_period = data[-period:]
+        # Debug: Check raw data
+        if len(data) < 20:
+            return {"Ticker": ticker, "Error": "Not enough data to calculate indicators"}
+        
+        st.write(f"Raw Data for {ticker}:", data.tail())  # Debugging
+
+        # Calculate Indicators
+        data["RSI"] = calculate_rsi(data).fillna(50)
+        data["50_MA"] = data["Close"].rolling(window=50).mean().fillna(method='bfill')
+        data["200_MA"] = data["Close"].rolling(window=200).mean().fillna(method='bfill')
+        data["Upper_BB"] = (data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()).fillna(method='bfill')
+        data["Lower_BB"] = (data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()).fillna(method='bfill')
+
+        # Calculate Ranges
+        def calculate_ranges(data_period):
+            if data_period.empty:
+                return None, None, None
             buy = data_period["Lower_BB"].mean()
             sell = data_period["Upper_BB"].mean()
-            stop_loss = buy * 0.97  # Fixed stop-loss 3% below buy level
-            
-            # Define buy and sell ranges
-            buy_range_min = buy * (1 - buffer_percent / 100)
-            buy_range_max = buy * (1 + buffer_percent / 100)
-            sell_range_min = sell * (1 - buffer_percent / 100)
-            sell_range_max = sell * (1 + buffer_percent / 100)
+            stop_loss = buy * 0.97
+            return buy, sell, stop_loss
 
-            avg_rsi = data_period["RSI"].mean()
+        # Distinct Timeframes
+        daily_data = data[-1:]
+        weekly_data = data[-5:]
+        monthly_data = data[-20:]
 
-            return {
-                "Buy Range": (round(buy_range_min, 2), round(buy_range_max, 2)),
-                "Sell Range": (round(sell_range_min, 2), round(sell_range_max, 2)),
-                "Stop Loss": round(stop_loss, 2),
-                "Average RSI": round(avg_rsi, 2)
-            }
+        daily_buy, daily_sell, daily_stop_loss = calculate_ranges(daily_data)
+        weekly_buy, weekly_sell, weekly_stop_loss = calculate_ranges(weekly_data)
+        monthly_buy, monthly_sell, monthly_stop_loss = calculate_ranges(monthly_data)
 
-        # Calculate levels for different timeframes
-        daily = levels_for_timeframe(data, 1)
-        weekly = levels_for_timeframe(data, 5)
-        monthly = levels_for_timeframe(data, 20)
+        # Handle Missing or Invalid Values
+        if not daily_buy or not daily_sell:
+            daily_buy, daily_sell = 0, 0
+        if not weekly_buy or not weekly_sell:
+            weekly_buy, weekly_sell = 0, 0
+        if not monthly_buy or not monthly_sell:
+            monthly_buy, monthly_sell = 0, 0
 
         return {
             "Ticker": ticker,
-            "Daily Buy Range": daily["Buy Range"],
-            "Daily Sell Range": daily["Sell Range"],
-            "Daily Stop Loss": daily["Stop Loss"],
-            "Daily RSI": daily["Average RSI"],
-            "Weekly Buy Range": weekly["Buy Range"],
-            "Weekly Sell Range": weekly["Sell Range"],
-            "Weekly Stop Loss": weekly["Stop Loss"],
-            "Weekly RSI": weekly["Average RSI"],
-            "Monthly Buy Range": monthly["Buy Range"],
-            "Monthly Sell Range": monthly["Sell Range"],
-            "Monthly Stop Loss": monthly["Stop Loss"],
-            "Monthly RSI": monthly["Average RSI"],
+            "Daily Buy Range": (round(daily_buy * 0.98, 2), round(daily_buy * 1.02, 2)),
+            "Daily Sell Range": (round(daily_sell * 0.98, 2), round(daily_sell * 1.02, 2)),
+            "Daily Stop Loss": round(daily_stop_loss, 2),
+            "Weekly Buy Range": (round(weekly_buy * 0.98, 2), round(weekly_buy * 1.02, 2)),
+            "Weekly Sell Range": (round(weekly_sell * 0.98, 2), round(weekly_sell * 1.02, 2)),
+            "Weekly Stop Loss": round(weekly_stop_loss, 2),
+            "Monthly Buy Range": (round(monthly_buy * 0.98, 2), round(monthly_buy * 1.02, 2)),
+            "Monthly Sell Range": (round(monthly_sell * 0.98, 2), round(monthly_sell * 1.02, 2)),
+            "Monthly Stop Loss": round(monthly_stop_loss, 2),
             "Data": data
         }
     except Exception as e:
@@ -102,13 +104,13 @@ if not df.empty:
     tab1, tab2, tab3 = st.tabs(["📈 Daily Levels", "📉 Weekly Levels", "📊 Monthly Levels"])
 
     with tab1:
-        st.dataframe(df[["Ticker", "Daily Buy Range", "Daily Sell Range", "Daily Stop Loss", "Daily RSI"]])
+        st.dataframe(df[["Ticker", "Daily Buy Range", "Daily Sell Range", "Daily Stop Loss"]])
 
     with tab2:
-        st.dataframe(df[["Ticker", "Weekly Buy Range", "Weekly Sell Range", "Weekly Stop Loss", "Weekly RSI"]])
+        st.dataframe(df[["Ticker", "Weekly Buy Range", "Weekly Sell Range", "Weekly Stop Loss"]])
 
     with tab3:
-        st.dataframe(df[["Ticker", "Monthly Buy Range", "Monthly Sell Range", "Monthly Stop Loss", "Monthly RSI"]])
+        st.dataframe(df[["Ticker", "Monthly Buy Range", "Monthly Sell Range", "Monthly Stop Loss"]])
 
     st.download_button("📥 Download All Results as CSV", df.to_csv(index=False), "stock_screening_results.csv")
 
