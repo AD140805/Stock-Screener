@@ -48,11 +48,11 @@ def calculate_macd(data, short_period=12, long_period=26, signal_period=9):
 def fetch_and_analyze_data(ticker):
     try:
         stock = yf.Ticker(ticker.strip())
-        data = stock.history(period="6mo")
+        data = stock.history(period="1y")  # Fetch 1 year of data for 200 MA calculation
 
-        if len(data) < 20:
-            return {"Ticker": ticker, "Error": "Not enough data to calculate indicators"}
-        
+        if len(data) < 200:
+            return {"Ticker": ticker, "Error": "Not enough data for 200-day MA"}
+
         # Calculate Indicators
         data["RSI"] = calculate_rsi(data).fillna(50)
         data["ATR"] = calculate_atr(data).fillna(method='bfill')
@@ -138,10 +138,11 @@ for res in results:
     ))
 
     # 200-Day Moving Average Line
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data["200_MA"], mode='lines',
-        name="200-Day MA", line=dict(width=1.5, color="red", dash='dot')
-    ))
+    if not data["200_MA"].isna().all():  # Check if 200 MA exists
+        fig.add_trace(go.Scatter(
+            x=data.index, y=data["200_MA"], mode='lines',
+            name="200-Day MA", line=dict(width=2, color="red", dash='dot')
+        ))
 
     # Upper Bollinger Band
     fig.add_trace(go.Scatter(
@@ -167,7 +168,7 @@ for res in results:
         fig.add_shape(
             type="rect", x0=data.index[0], x1=data.index[-1],
             y0=buy_min, y1=buy_max, fillcolor="green",
-            opacity=0.1, line_width=0, name="Buy Range"
+            opacity=0.1, line_width=0
         )
 
     # Add Sell Range Shading
@@ -176,7 +177,7 @@ for res in results:
         fig.add_shape(
             type="rect", x0=data.index[0], x1=data.index[-1],
             y0=sell_min, y1=sell_max, fillcolor="red",
-            opacity=0.1, line_width=0, name="Sell Range"
+            opacity=0.1, line_width=0
         )
 
     # Update Layout for Dual Axis
