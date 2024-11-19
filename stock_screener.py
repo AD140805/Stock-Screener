@@ -4,12 +4,12 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # Set Streamlit Page Configuration
-st.set_page_config(page_title="Enhanced Stock Screener", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Advanced Stock Screener", page_icon="📈", layout="wide")
 
 # App Title
-st.title("📊 Advanced Indian Stock Screening Tool")
+st.title("📊 Advanced Indian Stock Screener")
 st.markdown("""
-Analyze Indian stocks with dynamic buy/sell ranges, advanced indicators, fundamental insights, and more!
+Analyze Indian stocks with dynamic buy/sell ranges, advanced indicators, support/resistance levels, and customizable charts!
 """)
 
 # Sidebar Input for Stock Selection
@@ -21,8 +21,12 @@ tickers = st.sidebar.text_area(
 ).split(",")
 tickers = [ticker.strip().upper() for ticker in tickers if ticker.strip()]
 
-# Toggle to Include Fibonacci Retracement
-include_fibonacci = st.sidebar.checkbox("Include Fibonacci Retracement Levels", value=True)
+# Indicator Selection
+indicators = st.sidebar.multiselect(
+    "Select Indicators to Display",
+    options=["RSI", "ATR", "EMA (50)", "EMA (200)", "Bollinger Bands", "Support/Resistance"],
+    default=["RSI", "ATR", "EMA (50)", "Bollinger Bands"]
+)
 
 # RSI Calculation Function
 def calculate_rsi(data, period=14):
@@ -44,6 +48,17 @@ def calculate_atr(data, period=14):
 def calculate_ema(data, period=50):
     return data['Close'].ewm(span=period, adjust=False).mean()
 
+# Support/Resistance Calculation
+def calculate_support_resistance(data):
+    supports = []
+    resistances = []
+    for i in range(2, len(data) - 2):
+        if data['Low'][i] < data['Low'][i-1] and data['Low'][i] < data['Low'][i+1]:
+            supports.append({'level': data['Low'][i], 'type': 'support'})
+        if data['High'][i] > data['High'][i-1] and data['High'][i] > data['High'][i+1]:
+            resistances.append({'level': data['High'][i], 'type': 'resistance'})
+    return supports, resistances
+
 # Fetch and Analyze Stock Data
 @st.cache_data
 def fetch_and_analyze_data(ticker):
@@ -58,12 +73,33 @@ def fetch_and_analyze_data(ticker):
         data["ATR"] = calculate_atr(data).fillna(method='bfill')
         data["EMA_50"] = calculate_ema(data, period=50)
         data["EMA_200"] = calculate_ema(data, period=200)
-        data["50_MA"] = data['Close'].rolling(window=50).mean()
-        data["200_MA"] = data['Close'].rolling(window=200).mean()
-        data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
-        data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
+        data["Upper_BB"] = data['Close'].rolling(window=20).mean() + 2 * data['Close'].rolling(window=20).std()
+        data["Lower_BB"] = data['Close'].rolling(window=20).mean() - 2 * data['Close'].rolling(window=20).std()
 
-        return {"Ticker": ticker, "Data": data}
+        # Calculate Dynamic Ranges
+        def calculate_ranges(data_period):
+            if data_period.empty:
+                return None, None, None
+            buy = data_period["Lower_BB"].mean()
+            sell = data_period["Upper_BB"].mean()
+            atr = data_period["ATR"].mean()
+            return (round(buy - atr, 2), round(buy + atr, 2)), (round(sell - atr, 2), round(sell + atr, 2)), round(buy - (2 * atr), 2)
+
+        daily_data = data[-1:]
+        daily_buy, daily_sell, daily_stop_loss = calculate_ranges(daily_data)
+
+        # Support/Resistance Levels
+        supports, resistances = calculate_support_resistance(data)
+
+        return {
+            "Ticker": ticker,
+            "Data": data,
+            "Daily Buy Range": daily_buy,
+            "Daily Sell Range": daily_sell,
+            "Daily Stop Loss": daily_stop_loss,
+            "Support Levels": supports,
+            "Resistance Levels": resistances
+        }
     except Exception as e:
         return {"Ticker": ticker, "Error": str(e)}
 
@@ -81,7 +117,7 @@ for result in results:
     data = result['Data']
 
     st.subheader(f"📈 {ticker} Technical Chart")
-
+    
     # Plot Technical Chart
     fig = go.Figure()
 
@@ -95,48 +131,39 @@ for result in results:
         name='Candlestick'
     ))
 
-    # Moving Averages
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data['50_MA'],
-        mode='lines', name="50-Day MA",
-        line=dict(color="orange", dash='dash')
-    ))
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data['200_MA'],
-        mode='lines', name="200-Day MA",
-        line=dict(color="red", dash='dot')
-    ))
+    # Add Selected Indicators
+    if "RSI" in indicators:
+        st.write(f"RSI: {round(data['RSI'].iloc[-1], 2)}")
+    if "ATR" in indicators:
+        st.write(f"ATR: {round(data['ATR'].iloc[-1], 2)}")
+    if "EMA (50)" in indicators:
+        fig.add_trace(go.Scatter(
+            x=data.index, y=data["EMA_50"], mode='lines',
+            name="50-Day EMA", line=dict(color="blue", dash='dot')
+        ))
+    if "EMA (200)" in indicators:
+        fig.add_trace(go.Scatter(
+            x=data.index, y=data["EMA_200"], mode='lines',
+            name="200-Day EMA", line=dict(color="purple", dash='dash')
+        ))
+    if "Bollinger Bands" in indicators:
+        fig.add_trace(go.Scatter(
+            x=data.index, y=data["Upper_BB"], mode='lines',
+            name="Upper Bollinger Band", line=dict(color="green")
+        ))
+        fig.add_trace(go.Scatter(
+            x=data.index, y=data["Lower_BB"], mode='lines',
+            name="Lower Bollinger Band", line=dict(color="green")
+        ))
 
-    # Exponential Moving Averages
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data['EMA_50'],
-        mode='lines', name="50-Day EMA",
-        line=dict(color="blue", dash='dot')
-    ))
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data['EMA_200'],
-        mode='lines', name="200-Day EMA",
-        line=dict(color="purple", dash='dash')
-    ))
-
-    # Bollinger Bands
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data["Upper_BB"], mode='lines',
-        name="Upper Bollinger Band", line=dict(width=1, color="green")
-    ))
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data["Lower_BB"], mode='lines',
-        name="Lower Bollinger Band", line=dict(width=1, color="green")
-    ))
-
-    # Fibonacci Retracement
-    if include_fibonacci:
-        high = data['High'].max()
-        low = data['Low'].min()
-        diff = high - low
-        levels = [high - diff * ratio for ratio in [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]]
-        for level in levels:
-            fig.add_hline(y=level, line_dash="dash", line_color="gold", opacity=0.5)
+    # Add Support/Resistance Levels
+    if "Support/Resistance" in indicators:
+        supports = result["Support Levels"]
+        resistances = result["Resistance Levels"]
+        for s in supports:
+            fig.add_hline(y=s['level'], line_dash="dot", line_color="green")
+        for r in resistances:
+            fig.add_hline(y=r['level'], line_dash="dot", line_color="red")
 
     # Chart Layout
     fig.update_layout(
@@ -148,20 +175,8 @@ for result in results:
     )
     st.plotly_chart(fig)
 
-    # Display Key Metrics
-    st.markdown(f"### Key Metrics for {ticker}")
-    metrics = {
-        "RSI": round(data["RSI"].iloc[-1], 2),
-        "ATR": round(data["ATR"].iloc[-1], 2),
-        "50-Day EMA": round(data["EMA_50"].iloc[-1], 2),
-        "200-Day EMA": round(data["EMA_200"].iloc[-1], 2),
-        "Latest Close Price": round(data["Close"].iloc[-1], 2),
-    }
-    st.table(pd.DataFrame.from_dict(metrics, orient="index", columns=["Value"]))
-
-# Footer Branding
-st.markdown("""
-    <div style="text-align: center; margin-top: 30px; color: #888;">
-        Built with ❤️ using <b>Streamlit</b> | Inspired by <b>TradingView</b>
-    </div>
-""", unsafe_allow_html=True)
+    # Display Ranges
+    st.markdown(f"### Daily Buy/Sell/Stop Loss Ranges for {ticker}")
+    st.write(f"**Buy Range:** {result['Daily Buy Range']}")
+    st.write(f"**Sell Range:** {result['Daily Sell Range']}")
+    st.write(f"**Stop Loss:** {result['Daily Stop Loss']}")
