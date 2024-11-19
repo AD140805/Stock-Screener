@@ -2,18 +2,17 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from datetime import datetime, timedelta
 
-# Streamlit Config
+# Set Streamlit Page Configuration
 st.set_page_config(page_title="Stock Screener", page_icon="📈", layout="wide")
 
-# Title
+# App Title
 st.title("📊 Indian Stock Screening Tool")
 st.markdown("""
-Get **daily**, **weekly**, and **monthly** buy, exit, and stop-loss levels for Indian stocks using **RSI**, **ATR**, and Bollinger Bands.
+Analyze **daily**, **weekly**, and **monthly** buy, exit, and stop-loss levels for Indian stocks.
 """)
 
-# Sidebar Input
+# Sidebar for Stock Input
 st.sidebar.header("Input Options")
 default_tickers = ["TCS.NS", "RELIANCE.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
 tickers = st.sidebar.text_area(
@@ -21,114 +20,85 @@ tickers = st.sidebar.text_area(
     value=", ".join(default_tickers)
 ).split(",")
 
-# Indicator Functions
+# RSI Calculation Function
 def calculate_rsi(data, period=14):
-    delta = data["Close"].diff()
+    delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-def calculate_atr(data, period=14):
-    high_low = data["High"] - data["Low"]
-    high_close = abs(data["High"] - data["Close"].shift())
-    low_close = abs(data["Low"] - data["Close"].shift())
-    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    return true_range.rolling(window=period).mean()
-
-def calculate_bollinger_bands(data, window=20):
-    rolling_mean = data["Close"].rolling(window=window).mean()
-    rolling_std = data["Close"].rolling(window=window).std()
-    upper_band = rolling_mean + 2 * rolling_std
-    lower_band = rolling_mean - 2 * rolling_std
-    return upper_band, lower_band
-
-# Fetch and Analyze Data
+# Fetch and Analyze Stock Data
 def fetch_and_analyze_data(ticker):
     try:
         stock = yf.Ticker(ticker.strip())
         data = stock.history(period="6mo")
-
-        if len(data) < 20:
-            return {"Ticker": ticker, "Error": "Not enough data to compute indicators"}
-
-        # Calculate Indicators for All Data
+        
+        # Calculate Indicators
         data["RSI"] = calculate_rsi(data)
-        data["ATR"] = calculate_atr(data)
-        data["Upper_BB"], data["Lower_BB"] = calculate_bollinger_bands(data)
+        data["50_MA"] = data["Close"].rolling(window=50).mean()
+        data["200_MA"] = data["Close"].rolling(window=200).mean()
+        data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
+        data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
 
-        # Define current date
-        current_date = datetime.now().date()
+        # Timeframe Levels
+        def levels_for_timeframe(data, period):
+            data_period = data[-period:]
+            buy = data_period["Lower_BB"].mean()
+            exit = data_period["Upper_BB"].mean()
+            stop_loss = buy * 0.97
+            avg_rsi = data_period["RSI"].mean()
+            return buy, exit, stop_loss, avg_rsi
 
-        # Current Day Data
-        daily_data = data[data.index.date == current_date]
-
-        # Current Week Data
-        start_of_week = current_date - timedelta(days=current_date.weekday())
-        end_of_week = start_of_week + timedelta(days=6)
-        weekly_data = data[(data.index.date >= start_of_week) & (data.index.date <= end_of_week)]
-
-        # Current Month Data
-        start_of_month = current_date.replace(day=1)
-        if current_date.month == 12:
-            end_of_month = current_date.replace(day=31)
-        else:
-            end_of_month = (current_date.replace(month=current_date.month + 1, day=1) - timedelta(days=1)).date()
-        monthly_data = data[(data.index.date >= start_of_month) & (data.index.date <= end_of_month)]
-
-        # Level Calculation Function
-        def calculate_levels(data_period):
-            if len(data_period) < 1 or data_period.isnull().values.any():
-                return None, None, None
-
-            lower_bb = data_period["Lower_BB"].iloc[-1]
-            rsi = data_period["RSI"].iloc[-1]
-            buy_price = lower_bb if rsi < 30 else data_period["Close"].iloc[-1]
-
-            upper_bb = data_period["Upper_BB"].iloc[-1]
-            exit_price = upper_bb if rsi > 70 else data_period["Close"].iloc[-1]
-
-            atr = data_period["ATR"].iloc[-1]
-            stop_loss = buy_price - atr if buy_price and atr else None
-
-            return buy_price, exit_price, stop_loss
-
-        # Calculate Levels for Each Timeframe
-        daily_buy, daily_exit, daily_stop_loss = calculate_levels(daily_data)
-        weekly_buy, weekly_exit, weekly_stop_loss = calculate_levels(weekly_data)
-        monthly_buy, monthly_exit, monthly_stop_loss = calculate_levels(monthly_data)
+        daily_buy, daily_exit, daily_stop_loss, daily_rsi = levels_for_timeframe(data, 1)
+        weekly_buy, weekly_exit, weekly_stop_loss, weekly_rsi = levels_for_timeframe(data, 5)
+        monthly_buy, monthly_exit, monthly_stop_loss, monthly_rsi = levels_for_timeframe(data, 20)
 
         return {
             "Ticker": ticker,
-            "Daily Buy": round(daily_buy, 2) if daily_buy else "N/A",
-            "Daily Exit": round(daily_exit, 2) if daily_exit else "N/A",
-            "Daily Stop Loss": round(daily_stop_loss, 2) if daily_stop_loss else "N/A",
-            "Weekly Buy": round(weekly_buy, 2) if weekly_buy else "N/A",
-            "Weekly Exit": round(weekly_exit, 2) if weekly_exit else "N/A",
-            "Weekly Stop Loss": round(weekly_stop_loss, 2) if weekly_stop_loss else "N/A",
-            "Monthly Buy": round(monthly_buy, 2) if monthly_buy else "N/A",
-            "Monthly Exit": round(monthly_exit, 2) if monthly_exit else "N/A",
-            "Monthly Stop Loss": round(monthly_stop_loss, 2) if monthly_stop_loss else "N/A",
+            "Daily Buy": round(daily_buy, 2),
+            "Daily Exit": round(daily_exit, 2),
+            "Daily Stop Loss": round(daily_stop_loss, 2),
+            "Daily RSI": round(daily_rsi, 2),
+            "Weekly Buy": round(weekly_buy, 2),
+            "Weekly Exit": round(weekly_exit, 2),
+            "Weekly Stop Loss": round(weekly_stop_loss, 2),
+            "Weekly RSI": round(weekly_rsi, 2),
+            "Monthly Buy": round(monthly_buy, 2),
+            "Monthly Exit": round(monthly_exit, 2),
+            "Monthly Stop Loss": round(monthly_stop_loss, 2),
+            "Monthly RSI": round(monthly_rsi, 2),
             "Data": data
         }
     except Exception as e:
         return {"Ticker": ticker, "Error": str(e)}
 
-# Process All Tickers
+# Fetch and Analyze Data for All Tickers
 results = [fetch_and_analyze_data(ticker) for ticker in tickers]
 
-# Display Results
-st.header("📋 Stock Screening Results")
+# Results Table
 summary = [
     {k: v for k, v in res.items() if k != "Data"} for res in results if "Error" not in res
 ]
 df = pd.DataFrame(summary)
-if not df.empty:
-    st.dataframe(df)
-else:
-    st.warning("No valid data to display. Please check the tickers or try again.")
 
-# Plot Charts
+# Tabs for Display
+st.header("📋 Stock Screening Results")
+if not df.empty:
+    tab1, tab2, tab3 = st.tabs(["📈 Daily Levels", "📉 Weekly Levels", "📊 Monthly Levels"])
+
+    with tab1:
+        st.dataframe(df[["Ticker", "Daily Buy", "Daily Exit", "Daily Stop Loss", "Daily RSI"]])
+
+    with tab2:
+        st.dataframe(df[["Ticker", "Weekly Buy", "Weekly Exit", "Weekly Stop Loss", "Weekly RSI"]])
+
+    with tab3:
+        st.dataframe(df[["Ticker", "Monthly Buy", "Monthly Exit", "Monthly Stop Loss", "Monthly RSI"]])
+
+    st.download_button("📥 Download All Results as CSV", df.to_csv(index=False), "stock_screening_results.csv")
+
+# Chart Display
 st.header("📊 Technical Charts")
 for res in results:
     if "Error" in res:
@@ -137,9 +107,13 @@ for res in results:
 
     data = res["Data"]
     ticker = res["Ticker"]
+    
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close Price"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["Upper_BB"], mode="lines", name="Upper Bollinger Band"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["Lower_BB"], mode="lines", name="Lower Bollinger Band"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode='lines', name="Close Price"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["50_MA"], mode='lines', name="50-Day MA"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["200_MA"], mode='lines', name="200-Day MA"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["Upper_BB"], mode='lines', name="Upper Bollinger Band"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["Lower_BB"], mode='lines', name="Lower Bollinger Band"))
+
     fig.update_layout(title=f"Technical Chart for {ticker}", xaxis_title="Date", yaxis_title="Price")
     st.plotly_chart(fig)
