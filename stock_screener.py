@@ -32,7 +32,7 @@ def calculate_atr(data, period=14):
     high_low = data["High"] - data["Low"]
     high_close = abs(data["High"] - data["Close"].shift())
     low_close = abs(data["Low"] - data["Close"].shift())
-    true_range = high_low.combine(high_close, max).combine(low_close, max)
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
     return true_range.rolling(window=period).mean()
 
 def calculate_bollinger_bands(data, window=20):
@@ -84,7 +84,7 @@ def fetch_and_analyze_data(ticker):
 
         # Timeframe Levels
         def calculate_levels(data_period):
-            if len(data_period) < 1:
+            if len(data_period) < 1 or data_period.isnull().values.any():
                 return None, None, None
 
             lower_bb = data_period["Lower_BB"].iloc[-1]
@@ -95,7 +95,7 @@ def fetch_and_analyze_data(ticker):
             exit_price = upper_bb if rsi > 70 else data_period["Close"].iloc[-1]
 
             atr = data_period["ATR"].iloc[-1]
-            stop_loss = buy_price - atr if buy_price else None
+            stop_loss = buy_price - atr if buy_price and atr else None
 
             return buy_price, exit_price, stop_loss
 
@@ -104,16 +104,17 @@ def fetch_and_analyze_data(ticker):
         weekly_buy, weekly_exit, weekly_stop_loss = calculate_levels(data_weekly[-1:])
         monthly_buy, monthly_exit, monthly_stop_loss = calculate_levels(data_monthly[-1:])
 
+        # Return results with validation
         return {
             "Ticker": ticker,
-            "Daily Buy": round(daily_buy, 2),
-            "Daily Exit": round(daily_exit, 2),
+            "Daily Buy": round(daily_buy, 2) if daily_buy else "N/A",
+            "Daily Exit": round(daily_exit, 2) if daily_exit else "N/A",
             "Daily Stop Loss": round(daily_stop_loss, 2) if daily_stop_loss else "N/A",
-            "Weekly Buy": round(weekly_buy, 2),
-            "Weekly Exit": round(weekly_exit, 2),
+            "Weekly Buy": round(weekly_buy, 2) if weekly_buy else "N/A",
+            "Weekly Exit": round(weekly_exit, 2) if weekly_exit else "N/A",
             "Weekly Stop Loss": round(weekly_stop_loss, 2) if weekly_stop_loss else "N/A",
-            "Monthly Buy": round(monthly_buy, 2),
-            "Monthly Exit": round(monthly_exit, 2),
+            "Monthly Buy": round(monthly_buy, 2) if monthly_buy else "N/A",
+            "Monthly Exit": round(monthly_exit, 2) if monthly_exit else "N/A",
             "Monthly Stop Loss": round(monthly_stop_loss, 2) if monthly_stop_loss else "N/A",
             "Data": data
         }
