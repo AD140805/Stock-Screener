@@ -51,12 +51,12 @@ def fetch_and_analyze_data(ticker):
         if len(data) < 20:
             return {"Ticker": ticker, "Error": "Not enough data to compute indicators"}
 
-        # Calculate Indicators
+        # Calculate Daily Indicators
         data["RSI"] = calculate_rsi(data)
         data["ATR"] = calculate_atr(data)
         data["Upper_BB"], data["Lower_BB"] = calculate_bollinger_bands(data)
 
-        # Resample data for weekly and monthly
+        # Resample Data for Weekly and Monthly
         data_weekly = data.resample('W').agg({
             'Open': 'first',
             'High': 'max',
@@ -73,7 +73,7 @@ def fetch_and_analyze_data(ticker):
             'Volume': 'sum'
         }).dropna()
 
-        # Recalculate indicators for weekly and monthly
+        # Recalculate Indicators for Weekly and Monthly
         data_weekly["RSI"] = calculate_rsi(data_weekly)
         data_weekly["ATR"] = calculate_atr(data_weekly)
         data_weekly["Upper_BB"], data_weekly["Lower_BB"] = calculate_bollinger_bands(data_weekly)
@@ -82,7 +82,7 @@ def fetch_and_analyze_data(ticker):
         data_monthly["ATR"] = calculate_atr(data_monthly)
         data_monthly["Upper_BB"], data_monthly["Lower_BB"] = calculate_bollinger_bands(data_monthly)
 
-        # Timeframe Levels
+        # Level Calculation Function
         def calculate_levels(data_period):
             if len(data_period) < 1 or data_period.isnull().values.any():
                 return None, None, None
@@ -99,12 +99,17 @@ def fetch_and_analyze_data(ticker):
 
             return buy_price, exit_price, stop_loss
 
-        # Calculate Levels
+        # Calculate Levels for Each Timeframe
         daily_buy, daily_exit, daily_stop_loss = calculate_levels(data[-1:])
         weekly_buy, weekly_exit, weekly_stop_loss = calculate_levels(data_weekly[-1:])
         monthly_buy, monthly_exit, monthly_stop_loss = calculate_levels(data_monthly[-1:])
 
-        # Return results with validation
+        # Debug Outputs for Validation
+        st.write(f"Debugging {ticker}:")
+        st.write("Daily Data Sample", data.tail())
+        st.write("Weekly Data Sample", data_weekly.tail())
+        st.write("Monthly Data Sample", data_monthly.tail())
+
         return {
             "Ticker": ticker,
             "Daily Buy": round(daily_buy, 2) if daily_buy else "N/A",
