@@ -52,7 +52,7 @@ def fetch_and_analyze_data(ticker):
         if len(data) < 20:
             return {"Ticker": ticker, "Error": "Not enough data to compute indicators"}
 
-        # Calculate Daily Indicators
+        # Calculate Indicators for All Data
         data["RSI"] = calculate_rsi(data)
         data["ATR"] = calculate_atr(data)
         data["Upper_BB"], data["Lower_BB"] = calculate_bollinger_bands(data)
@@ -60,24 +60,20 @@ def fetch_and_analyze_data(ticker):
         # Define current date
         current_date = datetime.now().date()
 
-        # Filter data for the current day
+        # Current Day Data
         daily_data = data[data.index.date == current_date]
 
-        # Calculate start and end of the current week
+        # Current Week Data
         start_of_week = current_date - timedelta(days=current_date.weekday())
         end_of_week = start_of_week + timedelta(days=6)
-
-        # Filter data for the current week
         weekly_data = data[(data.index.date >= start_of_week) & (data.index.date <= end_of_week)]
 
-        # Calculate start and end of the current month
+        # Current Month Data
         start_of_month = current_date.replace(day=1)
         if current_date.month == 12:
             end_of_month = current_date.replace(day=31)
         else:
             end_of_month = (current_date.replace(month=current_date.month + 1, day=1) - timedelta(days=1)).date()
-
-        # Filter data for the current month
         monthly_data = data[(data.index.date >= start_of_month) & (data.index.date <= end_of_month)]
 
         # Level Calculation Function
@@ -143,6 +139,7 @@ for res in results:
     ticker = res["Ticker"]
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close Price"))
-    fig.add_trace
-::contentReference[oaicite:0]{index=0}
- 
+    fig.add_trace(go.Scatter(x=data.index, y=data["Upper_BB"], mode="lines", name="Upper Bollinger Band"))
+    fig.add_trace(go.Scatter(x=data.index, y=data["Lower_BB"], mode="lines", name="Lower Bollinger Band"))
+    fig.update_layout(title=f"Technical Chart for {ticker}", xaxis_title="Date", yaxis_title="Price")
+    st.plotly_chart(fig)
