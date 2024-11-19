@@ -3,24 +3,51 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-# Set Streamlit Page Configuration
-st.set_page_config(page_title="Advanced Stock Screener", page_icon="📈", layout="wide")
+# Streamlit Config
+st.set_page_config(
+    page_title="Advanced Indian Stock Screener",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# App Title
-st.title("📊 Advanced Indian Stock Screening Tool")
+# App Header with Styling
 st.markdown("""
-Get **dynamic buy/sell ranges**, **advanced indicators**, and **fundamental analysis** for Indian stocks. 
-""")
+<div style="background-color: #4CAF50; padding: 10px; border-radius: 10px;">
+    <h1 style="color: white; text-align: center;">📊 Advanced Indian Stock Screening Tool</h1>
+    <p style="color: white; text-align: center;">Get dynamic buy/sell ranges, advanced indicators, and fundamental analysis for Indian stocks.</p>
+</div>
+""", unsafe_allow_html=True)
 
-# Sidebar for Stock Input
-st.sidebar.header("Input Options")
+# Sidebar Customization
+st.sidebar.markdown("""
+<div style="background-color: #f4f4f4; padding: 10px; border-radius: 10px;">
+    <h3>Input Options 🛠️</h3>
+</div>
+""", unsafe_allow_html=True)
+
 default_tickers = ["TCS.NS", "RELIANCE.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
 tickers = st.sidebar.text_area(
     "Enter stock tickers (comma-separated):",
     value=", ".join(default_tickers)
 ).split(",")
 
-# RSI Calculation Function
+st.sidebar.markdown("---")
+
+# Collapsible Sidebar for Fundamentals
+with st.sidebar.expander("🔍 Fundamental Analysis"):
+    for ticker in tickers:
+        stock = yf.Ticker(ticker.strip())
+        info = stock.info
+        st.subheader(f"{ticker} Fundamentals")
+        st.write(f"**Market Cap**: {info.get('marketCap')}")
+        st.write(f"**PE Ratio**: {info.get('trailingPE')}")
+        st.write(f"**EPS**: {info.get('trailingEps')}")
+        st.write(f"**Dividend Yield**: {info.get('dividendYield')}")
+
+st.sidebar.markdown("---")
+
+# Indicator Calculation Functions (No Change)
 def calculate_rsi(data, period=14):
     delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
@@ -28,7 +55,6 @@ def calculate_rsi(data, period=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-# ATR Calculation Function
 def calculate_atr(data, period=14):
     high_low = data['High'] - data['Low']
     high_close = abs(data['High'] - data['Close'].shift())
@@ -36,7 +62,6 @@ def calculate_atr(data, period=14):
     true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
     return true_range.rolling(window=period).mean()
 
-# MACD Calculation Function
 def calculate_macd(data, short_period=12, long_period=26, signal_period=9):
     short_ema = data['Close'].ewm(span=short_period, adjust=False).mean()
     long_ema = data['Close'].ewm(span=long_period, adjust=False).mean()
@@ -44,12 +69,11 @@ def calculate_macd(data, short_period=12, long_period=26, signal_period=9):
     signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
     return macd_line, signal_line
 
-# Fetch and Analyze Stock Data
+# Data Fetch and Analysis Function
 def fetch_and_analyze_data(ticker):
     try:
         stock = yf.Ticker(ticker.strip())
-        data = stock.history(period="1y")  # Fetch 1 year of data for 200 MA calculation
-
+        data = stock.history(period="1y")
         if len(data) < 200:
             return {"Ticker": ticker, "Error": "Not enough data for 200-day MA"}
 
@@ -62,7 +86,7 @@ def fetch_and_analyze_data(ticker):
         data["Lower_BB"] = (data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()).fillna(method='bfill')
         data["MACD_Line"], data["Signal_Line"] = calculate_macd(data)
 
-        # Calculate Dynamic Ranges
+        # Dynamic Ranges
         def calculate_ranges(data_period):
             if data_period.empty:
                 return None, None, None
@@ -90,28 +114,23 @@ def fetch_and_analyze_data(ticker):
             "Monthly Buy Range": monthly_buy,
             "Monthly Sell Range": monthly_sell,
             "Monthly Stop Loss": monthly_stop_loss,
-            "RSI": round(data["RSI"].iloc[-1], 2),
-            "MACD Line": round(data["MACD_Line"].iloc[-1], 2),
-            "Signal Line": round(data["Signal_Line"].iloc[-1], 2),
-            "ATR": round(data["ATR"].iloc[-1], 2),
             "Data": data
         }
     except Exception as e:
         return {"Ticker": ticker, "Error": str(e)}
 
-# Fetch and Analyze Data for All Tickers
+# Fetch Data for All Tickers
 results = [fetch_and_analyze_data(ticker) for ticker in tickers]
 
-# Display Results
+# Table Display
+st.header("📋 Stock Screening Results")
 summary = [
     {k: v for k, v in res.items() if k != "Data"} for res in results if "Error" not in res
 ]
 df = pd.DataFrame(summary)
-
-st.header("📋 Stock Screening Results")
 if not df.empty:
-    st.dataframe(df)
-    st.download_button("📥 Download All Results as CSV", df.to_csv(index=False), "stock_screening_results.csv")
+    st.dataframe(df.style.highlight_max(axis=0, color='lightgreen'))
+    st.download_button("📥 Download Results", df.to_csv(index=False), "results.csv")
 
 # Chart Display
 st.header("📊 Technical Charts")
@@ -119,86 +138,15 @@ for res in results:
     if "Error" in res:
         st.warning(f"Error fetching data for {res['Ticker']}: {res['Error']}")
         continue
-
     data = res["Data"]
     ticker = res["Ticker"]
 
     fig = go.Figure()
-
-    # Close Price Line
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data["Close"], mode='lines',
-        name="Close Price", line=dict(width=2, color="blue")
-    ))
-
-    # 50-Day Moving Average Line
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data["50_MA"], mode='lines',
-        name="50-Day MA", line=dict(width=1.5, color="orange", dash='dash')
-    ))
-
-    # 200-Day Moving Average Line
-    if not data["200_MA"].isna().all():  # Check if 200 MA exists
-        fig.add_trace(go.Scatter(
-            x=data.index, y=data["200_MA"], mode='lines',
-            name="200-Day MA", line=dict(width=2, color="red", dash='dot')
-        ))
-
-    # Upper Bollinger Band
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data["Upper_BB"], mode='lines',
-        name="Upper Bollinger Band", line=dict(width=1, color="green")
-    ))
-
-    # Lower Bollinger Band
-    fig.add_trace(go.Scatter(
-        x=data.index, y=data["Lower_BB"], mode='lines',
-        name="Lower Bollinger Band", line=dict(width=1, color="green")
-    ))
-
-    # Add Volume as Bars (Secondary Axis)
-    fig.add_trace(go.Bar(
-        x=data.index, y=data["Volume"], name="Volume",
-        marker=dict(color="lightgreen", opacity=0.5), yaxis="y2"
-    ))
-
-    # Add Buy Range Shading
-    if res.get("Daily Buy Range"):
-        buy_min, buy_max = res["Daily Buy Range"]
-        fig.add_shape(
-            type="rect", x0=data.index[0], x1=data.index[-1],
-            y0=buy_min, y1=buy_max, fillcolor="green",
-            opacity=0.1, line_width=0
-        )
-
-    # Add Sell Range Shading
-    if res.get("Daily Sell Range"):
-        sell_min, sell_max = res["Daily Sell Range"]
-        fig.add_shape(
-            type="rect", x0=data.index[0], x1=data.index[-1],
-            y0=sell_min, y1=sell_max, fillcolor="red",
-            opacity=0.1, line_width=0
-        )
-
-    # Update Layout for Dual Axis
-    fig.update_layout(
-        title=f"Technical Chart for {ticker}",
-        xaxis_title="Date",
-        yaxis_title="Price",
-        yaxis2=dict(title="Volume", overlaying="y", side="right"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        height=600,
-    )
-
+    fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode='lines', name="Close Price", line=dict(width=2, color="blue")))
+    fig.add_trace(go.Scatter(x=data.index, y=data["50_MA"], mode='lines', name="50-Day MA", line=dict(width=1.5, color="orange", dash='dash')))
+    fig.add_trace(go.Scatter(x=data.index, y=data["200_MA"], mode='lines', name="200-Day MA", line=dict(width=2, color="red", dash='dot')))
+    fig.add_trace(go.Scatter(x=data.index, y=data["Upper_BB"], mode='lines', name="Upper BB", line=dict(width=1, color="green")))
+    fig.add_trace(go.Scatter(x=data.index, y=data["Lower_BB"], mode='lines', name="Lower BB", line=dict(width=1, color="green")))
+    fig.add_trace(go.Bar(x=data.index, y=data["Volume"], name="Volume", marker=dict(color="lightgreen", opacity=0.5), yaxis="y2"))
+    fig.update_layout(title=f"Technical Chart for {ticker}", yaxis2=dict(title="Volume", overlaying="y", side="right"))
     st.plotly_chart(fig)
-
-# Fundamental Analysis Placeholder
-st.sidebar.header("Fundamental Analysis")
-for ticker in tickers:
-    stock = yf.Ticker(ticker.strip())
-    info = stock.info
-    st.sidebar.subheader(f"{ticker} Fundamentals")
-    st.sidebar.write(f"Market Cap: {info.get('marketCap')}")
-    st.sidebar.write(f"PE Ratio: {info.get('trailingPE')}")
-    st.sidebar.write(f"EPS: {info.get('trailingEps')}")
-    st.sidebar.write(f"Dividend Yield: {info.get('dividendYield')}")
