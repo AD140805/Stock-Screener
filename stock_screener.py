@@ -9,7 +9,7 @@ st.set_page_config(page_title="Stock Screener", page_icon="📈", layout="wide")
 # App Title
 st.title("📊 Indian Stock Screening Tool")
 st.markdown("""
-Analyze **daily**, **weekly**, and **monthly** buy, exit, and stop-loss levels for Indian stocks.
+Analyze **daily**, **weekly**, and **monthly** buy, sell, and stop-loss ranges for Indian stocks.
 """)
 
 # Sidebar for Stock Input
@@ -41,33 +41,47 @@ def fetch_and_analyze_data(ticker):
         data["Upper_BB"] = data["Close"].rolling(window=20).mean() + 2 * data["Close"].rolling(window=20).std()
         data["Lower_BB"] = data["Close"].rolling(window=20).mean() - 2 * data["Close"].rolling(window=20).std()
 
-        # Timeframe Levels
-        def levels_for_timeframe(data, period):
+        # Define ranges for buy and sell
+        def levels_for_timeframe(data, period, buffer_percent=2):
             data_period = data[-period:]
             buy = data_period["Lower_BB"].mean()
-            exit = data_period["Upper_BB"].mean()
-            stop_loss = buy * 0.97
-            avg_rsi = data_period["RSI"].mean()
-            return buy, exit, stop_loss, avg_rsi
+            sell = data_period["Upper_BB"].mean()
+            stop_loss = buy * 0.97  # Fixed stop-loss 3% below buy level
+            
+            # Define buy and sell ranges
+            buy_range_min = buy * (1 - buffer_percent / 100)
+            buy_range_max = buy * (1 + buffer_percent / 100)
+            sell_range_min = sell * (1 - buffer_percent / 100)
+            sell_range_max = sell * (1 + buffer_percent / 100)
 
-        daily_buy, daily_exit, daily_stop_loss, daily_rsi = levels_for_timeframe(data, 1)
-        weekly_buy, weekly_exit, weekly_stop_loss, weekly_rsi = levels_for_timeframe(data, 5)
-        monthly_buy, monthly_exit, monthly_stop_loss, monthly_rsi = levels_for_timeframe(data, 20)
+            avg_rsi = data_period["RSI"].mean()
+
+            return {
+                "Buy Range": (round(buy_range_min, 2), round(buy_range_max, 2)),
+                "Sell Range": (round(sell_range_min, 2), round(sell_range_max, 2)),
+                "Stop Loss": round(stop_loss, 2),
+                "Average RSI": round(avg_rsi, 2)
+            }
+
+        # Calculate levels for different timeframes
+        daily = levels_for_timeframe(data, 1)
+        weekly = levels_for_timeframe(data, 5)
+        monthly = levels_for_timeframe(data, 20)
 
         return {
             "Ticker": ticker,
-            "Daily Buy": round(daily_buy, 2),
-            "Daily Exit": round(daily_exit, 2),
-            "Daily Stop Loss": round(daily_stop_loss, 2),
-            "Daily RSI": round(daily_rsi, 2),
-            "Weekly Buy": round(weekly_buy, 2),
-            "Weekly Exit": round(weekly_exit, 2),
-            "Weekly Stop Loss": round(weekly_stop_loss, 2),
-            "Weekly RSI": round(weekly_rsi, 2),
-            "Monthly Buy": round(monthly_buy, 2),
-            "Monthly Exit": round(monthly_exit, 2),
-            "Monthly Stop Loss": round(monthly_stop_loss, 2),
-            "Monthly RSI": round(monthly_rsi, 2),
+            "Daily Buy Range": daily["Buy Range"],
+            "Daily Sell Range": daily["Sell Range"],
+            "Daily Stop Loss": daily["Stop Loss"],
+            "Daily RSI": daily["Average RSI"],
+            "Weekly Buy Range": weekly["Buy Range"],
+            "Weekly Sell Range": weekly["Sell Range"],
+            "Weekly Stop Loss": weekly["Stop Loss"],
+            "Weekly RSI": weekly["Average RSI"],
+            "Monthly Buy Range": monthly["Buy Range"],
+            "Monthly Sell Range": monthly["Sell Range"],
+            "Monthly Stop Loss": monthly["Stop Loss"],
+            "Monthly RSI": monthly["Average RSI"],
             "Data": data
         }
     except Exception as e:
@@ -88,13 +102,13 @@ if not df.empty:
     tab1, tab2, tab3 = st.tabs(["📈 Daily Levels", "📉 Weekly Levels", "📊 Monthly Levels"])
 
     with tab1:
-        st.dataframe(df[["Ticker", "Daily Buy", "Daily Exit", "Daily Stop Loss", "Daily RSI"]])
+        st.dataframe(df[["Ticker", "Daily Buy Range", "Daily Sell Range", "Daily Stop Loss", "Daily RSI"]])
 
     with tab2:
-        st.dataframe(df[["Ticker", "Weekly Buy", "Weekly Exit", "Weekly Stop Loss", "Weekly RSI"]])
+        st.dataframe(df[["Ticker", "Weekly Buy Range", "Weekly Sell Range", "Weekly Stop Loss", "Weekly RSI"]])
 
     with tab3:
-        st.dataframe(df[["Ticker", "Monthly Buy", "Monthly Exit", "Monthly Stop Loss", "Monthly RSI"]])
+        st.dataframe(df[["Ticker", "Monthly Buy Range", "Monthly Sell Range", "Monthly Stop Loss", "Monthly RSI"]])
 
     st.download_button("📥 Download All Results as CSV", df.to_csv(index=False), "stock_screening_results.csv")
 
