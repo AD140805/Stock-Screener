@@ -14,22 +14,22 @@ st.set_page_config(
 # Add Custom CSS for TradingView-like Styling
 st.markdown("""
     <style>
-        /* General Layout */
-        .main { background-color: #f4f4f4; color: #333; font-family: 'Arial', sans-serif; }
+        /* Background and General Text Styling */
+        .main { background-color: #1e1e1e; color: #dcdcdc; font-family: 'Arial', sans-serif; }
         footer { visibility: hidden; }
-        
+
         /* Sidebar Styling */
-        [data-testid="stSidebar"] { background-color: #1c1c1e; color: white; }
+        [data-testid="stSidebar"] { background-color: #121212; color: white; }
         [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
             color: #e6e6e6;
         }
-        
+
         /* Chart Background */
-        .plotly-graph-div { background: #1f1f22; border-radius: 10px; padding: 10px; }
+        .plotly-graph-div { background: #1e1e1e; border-radius: 10px; padding: 10px; }
 
         /* Buttons */
         .stButton button {
-            background-color: #00bfff;
+            background-color: #1f77b4;
             color: white;
             border: none;
             border-radius: 5px;
@@ -37,6 +37,9 @@ st.markdown("""
         .stButton button:hover {
             background-color: #007acc;
         }
+
+        /* Data Table Styling */
+        .stDataFrame { border-radius: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -49,7 +52,7 @@ Experience the aesthetic and functionality of TradingView directly in this app!
 
 # Sidebar for Stock Input
 with st.sidebar:
-    st.header("Stock Input Options")
+    st.header("📥 Stock Input Options")
     default_tickers = ["TCS.NS", "RELIANCE.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
     tickers = st.text_area(
         "Enter stock tickers (comma-separated):",
@@ -59,7 +62,7 @@ with st.sidebar:
 
     tickers = [ticker.strip().upper() for ticker in tickers if ticker.strip()]
 
-# Function: Fetch and Analyze Stock Data
+# Function: Fetch Stock Data
 @st.cache_data
 def fetch_stock_data(ticker):
     try:
@@ -114,7 +117,7 @@ if tickers:
             # Volume as Bar Chart
             fig.add_trace(go.Bar(
                 x=data.index, y=data['Volume'],
-                name="Volume", marker=dict(color="#999999", opacity=0.6)
+                name="Volume", marker=dict(color="#666666", opacity=0.6)
             ))
 
             # Layout Customization for TradingView-like Look
