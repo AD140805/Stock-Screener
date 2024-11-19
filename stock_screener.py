@@ -124,22 +124,71 @@ for res in results:
     ticker = res["Ticker"]
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode='lines', name="Close Price"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["50_MA"], mode='lines', name="50-Day MA"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["200_MA"], mode='lines', name="200-Day MA"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["Upper_BB"], mode='lines', name="Upper Bollinger Band"))
-    fig.add_trace(go.Scatter(x=data.index, y=data["Lower_BB"], mode='lines', name="Lower Bollinger Band"))
-    fig.add_trace(go.Bar(x=data.index, y=data["Volume"], name="Volume", opacity=0.3))
 
-    # Highlight Buy/Sell Ranges
-    fig.add_shape(type="rect", x0=data.index[0], x1=data.index[-1],
-                  y0=res["Daily Buy Range"][0], y1=res["Daily Buy Range"][1],
-                  fillcolor="green", opacity=0.1, line_width=0, name="Daily Buy Range")
-    fig.add_shape(type="rect", x0=data.index[0], x1=data.index[-1],
-                  y0=res["Daily Sell Range"][0], y1=res["Daily Sell Range"][1],
-                  fillcolor="red", opacity=0.1, line_width=0, name="Daily Sell Range")
+    # Close Price Line
+    fig.add_trace(go.Scatter(
+        x=data.index, y=data["Close"], mode='lines',
+        name="Close Price", line=dict(width=2, color="blue")
+    ))
 
-    fig.update_layout(title=f"Technical Chart for {ticker}", xaxis_title="Date", yaxis_title="Price")
+    # 50-Day Moving Average Line
+    fig.add_trace(go.Scatter(
+        x=data.index, y=data["50_MA"], mode='lines',
+        name="50-Day MA", line=dict(width=1.5, color="orange", dash='dash')
+    ))
+
+    # 200-Day Moving Average Line
+    fig.add_trace(go.Scatter(
+        x=data.index, y=data["200_MA"], mode='lines',
+        name="200-Day MA", line=dict(width=1.5, color="red", dash='dot')
+    ))
+
+    # Upper Bollinger Band
+    fig.add_trace(go.Scatter(
+        x=data.index, y=data["Upper_BB"], mode='lines',
+        name="Upper Bollinger Band", line=dict(width=1, color="green")
+    ))
+
+    # Lower Bollinger Band
+    fig.add_trace(go.Scatter(
+        x=data.index, y=data["Lower_BB"], mode='lines',
+        name="Lower Bollinger Band", line=dict(width=1, color="green")
+    ))
+
+    # Add Volume as Bars (Secondary Axis)
+    fig.add_trace(go.Bar(
+        x=data.index, y=data["Volume"], name="Volume",
+        marker=dict(color="lightgreen", opacity=0.5), yaxis="y2"
+    ))
+
+    # Add Buy Range Shading
+    if res.get("Daily Buy Range"):
+        buy_min, buy_max = res["Daily Buy Range"]
+        fig.add_shape(
+            type="rect", x0=data.index[0], x1=data.index[-1],
+            y0=buy_min, y1=buy_max, fillcolor="green",
+            opacity=0.1, line_width=0, name="Buy Range"
+        )
+
+    # Add Sell Range Shading
+    if res.get("Daily Sell Range"):
+        sell_min, sell_max = res["Daily Sell Range"]
+        fig.add_shape(
+            type="rect", x0=data.index[0], x1=data.index[-1],
+            y0=sell_min, y1=sell_max, fillcolor="red",
+            opacity=0.1, line_width=0, name="Sell Range"
+        )
+
+    # Update Layout for Dual Axis
+    fig.update_layout(
+        title=f"Technical Chart for {ticker}",
+        xaxis_title="Date",
+        yaxis_title="Price",
+        yaxis2=dict(title="Volume", overlaying="y", side="right"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        height=600,
+    )
+
     st.plotly_chart(fig)
 
 # Fundamental Analysis Placeholder
